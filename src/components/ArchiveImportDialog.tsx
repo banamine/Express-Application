@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { useToast } from "@/src/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { Archive, Loader2, ExternalLink, Film, Library, Tv, AlertTriangle } from "lucide-react";
 import { RelativeTime, ThumbnailCell } from "./archive-shared";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
@@ -320,7 +321,7 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
       if (data.metadata.title) setGroupTitle(data.metadata.title);
     },
     onError: (error: Error) =>
-      toast({ title: "Failed to fetch from Archive.org", description: error.message, variant: "destructive" }),
+      sonnerToast.error(error.message || "Failed to fetch from Archive.org"),
   });
 
   const importMutation = useMutation({
@@ -576,12 +577,16 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
                   data-testid="input-archive-url"
                 />
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!archiveUrl.trim()) return;
                     if (isRssUrl(archiveUrl)) {
                       rssScanMutation.mutate();
                     } else {
-                      fetchMutation.mutate();
+                      try {
+                        await fetchMutation.mutateAsync();
+                      } catch (err: any) {
+                        sonnerToast.error(err.message || "Failed to fetch from Archive.org");
+                      }
                     }
                   }}
                   disabled={!archiveUrl.trim() || fetchMutation.isPending || rssScanMutation.isPending}

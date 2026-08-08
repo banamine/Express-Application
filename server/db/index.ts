@@ -11,7 +11,7 @@ let pgliteClient: PGlite | null = null;
 
 export function getDb() {
   if (!dbInstance) {
-    if (process.env.DATABASE_URL) {
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
       console.log('Using Neon Postgres');
       const sql = neon(process.env.DATABASE_URL);
       dbInstance = drizzleNeon(sql, { schema });

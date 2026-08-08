@@ -54,12 +54,46 @@ export function registerArchiveRoutes(app: Express) {
   app.post("/api/archive/fetch", async (req, res) => {
     try {
       const { url } = req.body;
-      const match = url.match(/\/details\/([^/]+)/);
-      if (!match) throw new Error("Invalid Archive URL");
-      const identifier = match[1];
+      let identifier = url;
+      const match = url.match(/\/details\/([^/?#]+)/);
+      if (match) identifier = match[1];
+      
       const resp = await fetch(`https://archive.org/metadata/${identifier}`);
       const data = await resp.json();
-      res.json(data);
+      
+      // Transform raw Archive.org data into the expected FetchResponse shape
+      const files = data.files || [];
+      const videoFiles = files.filter((f: any) => 
+        f.name && f.format && (
+          f.format.toLowerCase().includes('h.264') || 
+          f.format.toLowerCase().includes('mpeg4') ||
+          f.format.toLowerCase().includes('matroska') ||
+          f.format.toLowerCase().includes('quicktime') ||
+          f.format.toLowerCase().includes('ogg video') ||
+          f.format.toLowerCase().includes('theora') ||
+          f.format.toLowerCase().includes('512kb mpeg4') ||
+          f.format.toLowerCase().includes('mpeg-4')
+        )
+      );
+
+      const items = videoFiles.map((f: any) => ({
+        identifier: data.metadata?.identifier || identifier,
+        filename: f.name,
+        title: f.title || f.name,
+        url: `https://archive.org/download/${data.metadata?.identifier || identifier}/${f.name}`,
+        thumbnailUrl: `https://archive.org/services/img/${data.metadata?.identifier || identifier}`,
+        duration: parseFloat(f.length || '0'),
+        format: f.format,
+        size: parseInt(f.size || '0', 10),
+        suspect: parseFloat(f.length || '0') < 60 // mark as suspect if less than 60 seconds
+      }));
+
+      res.json({
+        items,
+        metadata: data.metadata || { identifier },
+        errors: [],
+        count: items.length
+      });
     } catch(e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -69,9 +103,10 @@ export function registerArchiveRoutes(app: Express) {
   app.post("/api/archive/import", async (req, res) => {
     try {
       const { url, groupTitle, replaceExisting } = req.body;
-      const match = url.match(/\/details\/([^/]+)/);
-      if (!match) throw new Error("Invalid Archive URL");
-      const identifier = match[1];
+      let identifier = url;
+      const match = url.match(/\/details\/([^/?#]+)/);
+      if (match) identifier = match[1];
+      
       const db = getDb();
       await db.insert(archiveHoldingQueue).values({
         identifier,
