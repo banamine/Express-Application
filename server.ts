@@ -11,9 +11,23 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  const allowedOrigins = [
+    'https://banamine.github.io',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://ais-pre-raoebohujuyks2vvwlantj-804326557407.us-east1.run.app',
+    'https://ais-dev-raoebohujuyks2vvwlantj-804326557407.us-east1.run.app'
+  ];
+
   app.use(cors({
-    origin: 'https://banamine.github.io',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl) or allowed origins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true
   }));
   app.use(express.json({ limit: '50mb' }));
