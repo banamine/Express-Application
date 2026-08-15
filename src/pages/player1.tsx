@@ -2,7 +2,6 @@ import { telemetry } from '../lib/telemetry';
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, FastForward, Maximize, Signal, ListVideo, Volume2, VolumeX } from 'lucide-react';
 import Hls from 'hls.js';
-import { AudioWatchdog } from '../lib/audio-watchdog';
 
 export default function Player1() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -16,9 +15,9 @@ export default function Player1() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
-  const watchdogRef = useRef<any>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [fallbackUrlOverride, setFallbackUrlOverride] = useState<string | null>(null);
+  const [needsInteraction, setNeedsInteraction] = useState(true);
 
 
   const resolveNextProgram = (queue: any[], startIndex: number, nowMs: number) => {
@@ -66,7 +65,7 @@ export default function Player1() {
   const computedTargetUrl = activeBumper?.videoUrl || currentProgram?.url || currentProgram?.videoUrl || currentProgram?.fallbackUrl;
   let targetUrl = fallbackUrlOverride || computedTargetUrl;
   
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
   if (targetUrl && targetUrl.startsWith('/')) {
     targetUrl = BACKEND_URL + targetUrl;
   }
@@ -109,6 +108,7 @@ export default function Player1() {
                 hls.recoverMediaError();
                 break;
               default:
+                setStatus('ERROR');
                 hls.destroy();
                 handleNext(); // skip on fatal
                 break;
@@ -137,15 +137,6 @@ export default function Player1() {
   const [isMuted, setIsMuted] = useState(true);
   const isMutedRef = useRef(true);
 
-  useEffect(() => {
-    if (videoRef.current) {
-      watchdogRef.current = new AudioWatchdog(videoRef.current);
-    }
-    return () => {
-      if (watchdogRef.current) watchdogRef.current.destroy();
-    };
-  }, [videoRef.current]);
-
   const handleVideoError = () => {
     const is404 = videoRef.current?.error?.code === 4;
     if (retryCount >= 2 || is404) {
@@ -170,6 +161,19 @@ export default function Player1() {
     }
     videoRef.current = el;
   }, []);
+
+  const handleInteract = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().catch(e => {
+        if (e.name !== 'AbortError') console.error(e);
+      });
+      setNeedsInteraction(false);
+      setIsPlaying(true);
+      setStatus('PLAYING');
+    }
+  };
 
   const toggleMute = () => {
     if (!videoRef.current) return;
@@ -352,7 +356,7 @@ export default function Player1() {
           onEnded={handleNext}
         />
         
-        {(status === 'IDLE' || status === 'LOADING') && (
+        { (status === 'IDLE' || status === 'LOADING') && !needsInteraction && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
             <div className="text-center space-y-4">
               <Signal className="h-16 w-16 mx-auto animate-pulse" style={{ color: 'var(--text-3)' }} />
@@ -360,20 +364,20 @@ export default function Player1() {
                 {status === 'LOADING' ? 'HYDRATING STREAM' : 'STANDBY SIGNAL'}
               </h3>
               <p className="text-sm font-mono" style={{ color: 'var(--text-3)' }}>
-                {status === 'IDLE' ? 'CLICK TO UNMUTE & PLAY' : 'WAITING FOR MEDIA STREAM'}
+                {status === 'IDLE' ? 'WAITING FOR MEDIA STREAM' : 'WAITING FOR MEDIA STREAM'}
               </p>
-              {status === 'IDLE' && (
-                 <button 
-                   onClick={() => {
-                     toggleMute();
-                     togglePlay();
-                   }}
-                   className="px-6 py-2 rounded-full font-bold text-sm tracking-wider uppercase mt-4 transition-transform hover:scale-105"
-                   style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-                 >
-                   Play Stream
-                 </button>
-              )}
+            </div>
+          </div>
+        )}
+        {needsInteraction && (
+          <div 
+            className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer"
+            style={{ backgroundColor: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
+            onClick={handleInteract}
+          >
+            <div className="flex flex-col items-center gap-3 px-8 py-6 bg-black/80 rounded-xl border border-white/20 shadow-2xl hover:bg-black transition-colors">
+              <Volume2 className="h-12 w-12 text-white" />
+              <span className="font-bold tracking-wider text-white uppercase text-lg">Tap to Enable Audio</span>
             </div>
           </div>
         )}

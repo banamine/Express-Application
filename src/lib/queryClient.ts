@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 
 export const queryClient = new QueryClient();
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
 
 export async function apiRequest(method: string, url: string, data?: unknown): Promise<Response> {
   const fullUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url.startsWith('/') ? '' : '/'}${url}`;

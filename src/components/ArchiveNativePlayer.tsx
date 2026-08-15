@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Volume2 } from 'lucide-react';
 import { telemetry } from '../lib/telemetry';
 
 export function ArchiveNativePlayer({ 
@@ -29,7 +30,7 @@ export function ArchiveNativePlayer({
 
   // Treat URL as an immutable string scalar
   let fullUrl = url;
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
   if (fullUrl && fullUrl.startsWith('/')) {
     fullUrl = BACKEND_URL + fullUrl;
   }
@@ -53,6 +54,7 @@ export function ArchiveNativePlayer({
   const handleInteract = () => {
     if (videoRef.current) {
       videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
       videoRef.current.play().catch(e => {
         if (e.name !== "AbortError") {
           console.error("Playback blocked", e.message);
@@ -131,11 +133,13 @@ export function ArchiveNativePlayer({
       {/* Interaction Overlay: Forces user to click/touch to enable audio and standard controls */}
       {needsInteraction && (
         <div 
-          className="absolute inset-0 flex items-center justify-center bg-black/60 cursor-pointer z-50"
+          className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
           onClick={handleInteract}
         >
-          <div className="px-6 py-3 bg-cyan-900/80 text-cyan-100 border border-cyan-400 rounded-lg shadow-[0_0_15px_rgba(0,255,255,0.5)] font-bold tracking-wider hover:bg-cyan-800 transition-colors">
-            TAP TO UNMUTE & PLAY
+          <div className="flex flex-col items-center gap-3 px-8 py-6 bg-black/80 rounded-xl border border-white/20 shadow-2xl hover:bg-black transition-colors">
+            <Volume2 className="h-12 w-12 text-white" />
+            <span className="font-bold tracking-wider text-white uppercase text-lg">Tap to Enable Audio</span>
           </div>
         </div>
       )}

@@ -45,7 +45,7 @@ export default function TVPlayer() {
 
   // Load Channel 2 (Live)
   useEffect(() => {
-    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
     const evtSource = new EventSource(BACKEND_URL + '/api/aj-pool/stream');
     
     evtSource.addEventListener('STATUS', (e: any) => {
@@ -80,7 +80,7 @@ export default function TVPlayer() {
   const linearProgram = linearQueue[linearIndex];
   let linearUrl = linearProgram?.url || linearProgram?.videoUrl || linearProgram?.fallbackUrl;
   
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
   if (linearUrl && linearUrl.startsWith('/')) {
     linearUrl = BACKEND_URL + linearUrl;
   }
@@ -170,6 +170,7 @@ export default function TVPlayer() {
     };
   }, [currentUrl, activeChannel]);
 
+  const [needsInteraction, setNeedsInteraction] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const isMutedRef = useRef(true);
 
@@ -180,6 +181,16 @@ export default function TVPlayer() {
     }
     videoRef.current = el;
   }, []);
+
+  const handleInteract = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().catch(e => { if (e.name !== "AbortError") console.error(e); });
+      setNeedsInteraction(false);
+      setIsPlaying(true);
+    }
+  };
 
   const toggleMute = () => {
     if (!videoRef.current) return;
@@ -255,7 +266,7 @@ export default function TVPlayer() {
           }}
         />
         
-        {(status === 'IDLE' || status === 'LOADING') && (
+        { (status === 'IDLE' || status === 'LOADING') && !needsInteraction && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
             <div className="text-center space-y-4">
               <Signal className="h-16 w-16 mx-auto animate-pulse" style={{ color: 'var(--text-3)' }} />
@@ -267,6 +278,18 @@ export default function TVPlayer() {
           </div>
         )}
 
+        {needsInteraction && (
+          <div 
+            className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer"
+            style={{ backgroundColor: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
+            onClick={handleInteract}
+          >
+            <div className="flex flex-col items-center gap-3 px-8 py-6 bg-black/80 rounded-xl border border-white/20 shadow-2xl hover:bg-black transition-colors">
+              <Volume2 className="h-12 w-12 text-white" />
+              <span className="font-bold tracking-wider text-white uppercase text-lg">Tap to Enable Audio</span>
+            </div>
+          </div>
+        )}
         {/* Overlay HUD */}
         <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
           <div>

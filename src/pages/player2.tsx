@@ -1,6 +1,6 @@
 import { telemetry } from '../lib/telemetry';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, FastForward, SkipBack, Maximize, Signal } from 'lucide-react';
+import { Play, Pause, FastForward, SkipBack, Maximize, Signal, Volume2 } from 'lucide-react';
 
 function getTargetDate(offsetDays: number = 0): string {
   const ptTimeStr = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit' });
@@ -60,7 +60,17 @@ export default function Player2() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFallback, setIsFallback] = useState(false);
   const [activeDateStamp, setActiveDateStamp] = useState(getTargetDate(0));
+  const [needsInteraction, setNeedsInteraction] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
+  const handleInteract = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().catch(e => { if (e.name !== "AbortError") console.error(e); });
+      setNeedsInteraction(false);
+      setIsPlaying(true);
+    }
+  };
   const isMutedRef = useRef(true);
 
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -103,13 +113,13 @@ export default function Player2() {
 
       if (foundAny) {
         if (offset < 0) {
-          console.info(`[Batch Ingest] Operating on fallback archive buffer from: ${dateStamp}`);
+          console.info(`[AJPool] Operating on fallback archive buffer from: ${dateStamp}`);
         } else {
-          console.log(`[Batch Ingest] Loaded live primary batch for: ${dateStamp}`);
+          console.log(`[AJPool] Loaded live primary batch for: ${dateStamp}`);
         }
         return { items: newPlaylist, isFallback: offset < 0, dateStamp };
       } else if (offset === 0) {
-        console.warn(`[Batch Ingest Warning]: Primary batch for ${dateStamp} missing. Engaging fallback protocol...`);
+        console.warn(`[AJPool Warning]: Primary batch for ${dateStamp} missing. Engaging fallback protocol...`);
       }
     }
     
@@ -139,12 +149,16 @@ export default function Player2() {
 
   useEffect(() => {
     if (videoRef.current && playlist.length > 0) {
-      videoRef.current.src = playlist[currentIndex].url;
-      if (isPlaying) {
-        videoRef.current.play().catch(err => {
-          console.error('Play failed:', err);
-          setIsPlaying(false);
-        });
+      const newUrl = playlist[currentIndex].url;
+      // Only assign if it actually changed, to prevent the 60s restart loop
+      if (videoRef.current.getAttribute('src') !== newUrl) {
+        videoRef.current.src = newUrl;
+        if (isPlaying) {
+          videoRef.current.play().catch(err => {
+            console.error('Play failed:', err);
+            setIsPlaying(false);
+          });
+        }
       }
     }
   }, [currentIndex, playlist]);
@@ -304,6 +318,18 @@ export default function Player2() {
               </div>
             </div>
           )}
+          {needsInteraction && (
+            <div 
+              className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer"
+              style={{ backgroundColor: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
+              onClick={handleInteract}
+            >
+              <div className="flex flex-col items-center gap-3 px-8 py-6 bg-black/80 rounded-xl border border-white/20 shadow-2xl hover:bg-black transition-colors">
+                <Volume2 className="h-12 w-12 text-white" />
+                <span className="font-bold tracking-wider text-white uppercase text-lg">Tap to Enable Audio</span>
+              </div>
+            </div>
+          )}
 
           {/* Overlay HUD */}
           <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
@@ -382,8 +408,7 @@ export default function Player2() {
           </h3>
           {isFallback && (
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">
-              Fallback
-            </span>
+              Fallback</span>
           )}
         </div>
         <p className="text-sm mb-4 font-mono font-bold tracking-widest drop-shadow-md" style={{ color: isFallback ? 'var(--text-3)' : '#facc15' }}>
@@ -419,10 +444,6 @@ export default function Player2() {
             )}
           </div>
         ))}
-        
-        {playlist.length === 0 && !isLoading && (
-          <p className="text-sm italic" style={{ color: 'var(--text-3)' }}>Next batch loading...</p>
-        )}
       </div>
     </div>
   );

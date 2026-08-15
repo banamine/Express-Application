@@ -2,7 +2,7 @@ import { telemetry } from '../lib/telemetry';
 import React, { useState, useEffect, useRef } from 'react';
 import { MinimalSlideOutGuide } from '@/src/components/MinimalSlideOutGuide';
 import { useActiveChannelStore } from '@/src/components/SlideOutGuide';
-import { Menu, Tv } from 'lucide-react';
+import { Menu, Tv, Volume2 } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { useStaticRundown, BroadcastSegment } from '@/src/hooks/useStaticRundown';
 import { getLiveLoopState } from '@/src/lib/live-loop';
@@ -28,8 +28,20 @@ export default function NewsPlayer() {
   const displayNetwork = activeNetwork;
   const [isFading, setIsFading] = useState(false);
   
+  const [needsInteraction, setNeedsInteraction] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const isMutedRef = useRef(true);
+
+  const handleInteract = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().catch(e => { if (e.name !== "AbortError") console.error(e); });
+      setNeedsInteraction(false);
+      setIsPlaying(true);
+      setStatus("PLAYING");
+    }
+  };
 
   const setVideoRef = (el: HTMLVideoElement | null) => {
     if (el) {
@@ -246,10 +258,10 @@ export default function NewsPlayer() {
                  setErrorCount(0);
                }}
                onCanPlay={() => {
-                 setStatus('SETTLING');
+                 setStatus(prev => prev === 'PLAYING' ? 'PLAYING' : 'SETTLING');
                }}
                onLoadedMetadata={(e) => {
-                 setStatus('SETTLING');
+                 setStatus(prev => prev === 'PLAYING' ? 'PLAYING' : 'SETTLING');
                  
                  const target = e.target as HTMLVideoElement;
                  // Diagnostic check for incoming video/audio tracks in the player
@@ -315,7 +327,7 @@ export default function NewsPlayer() {
              />
            )}
 
-           {(status === 'FETCHING_ARRAY' || status === 'HYDRATING_STREAM' || status === 'SETTLING') && (
+           {(status === 'FETCHING_ARRAY' || status === 'HYDRATING_STREAM' || status === 'SETTLING') && !needsInteraction && (
              <div className="absolute inset-0 flex items-center justify-center bg-black/95 z-10 transition-opacity">
                <div className="text-center space-y-4">
                  <div className="h-12 w-12 rounded-full border-2 border-primary/30 border-t-primary animate-spin mx-auto" />
@@ -328,6 +340,18 @@ export default function NewsPlayer() {
              </div>
            )}
 
+           {needsInteraction && (
+             <div 
+               className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer"
+               style={{ backgroundColor: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
+               onClick={handleInteract}
+             >
+               <div className="flex flex-col items-center gap-3 px-8 py-6 bg-black/80 rounded-xl border border-white/20 shadow-2xl hover:bg-black transition-colors">
+                 <Volume2 className="h-12 w-12 text-white" />
+                 <span className="font-bold tracking-wider text-white uppercase text-lg">Tap to Enable Audio</span>
+               </div>
+             </div>
+           )}
            {status === 'ERROR' && (
              <div className="absolute inset-0 flex items-center justify-center bg-black/95 z-10 transition-opacity">
                <div className="text-center space-y-4">

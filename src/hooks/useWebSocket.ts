@@ -8,7 +8,7 @@ export function useWebSocket(url: string) {
   useEffect(() => {
     let finalUrl = url;
     if (finalUrl.startsWith('/')) {
-       const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+       const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
        const wsBackend = BACKEND_URL.replace(/^http/, 'ws');
        finalUrl = `${wsBackend}${finalUrl}`;
     }

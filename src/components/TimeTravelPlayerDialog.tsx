@@ -18,7 +18,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
 
   useEffect(() => {
     let processedUrl = url;
-    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
     if (processedUrl && processedUrl.startsWith('/')) {
       processedUrl = BACKEND_URL + processedUrl;
     }
@@ -97,7 +97,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
   }, [open, url]);
 
     let processedUrl = url;
-    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
     if (processedUrl && processedUrl.startsWith('/')) {
       processedUrl = BACKEND_URL + processedUrl;
     }

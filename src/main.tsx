@@ -10,7 +10,7 @@ const originalFetch = window.fetch;
 const patchedFetch = async function(resource: RequestInfo | URL, config?: RequestInit) {
   let urlStr = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : resource.toString());
   
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  const BACKEND_URL = import.meta.env.DEV ? '' : 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
   if (urlStr.startsWith('/')) {
     urlStr = BACKEND_URL + urlStr;
   }

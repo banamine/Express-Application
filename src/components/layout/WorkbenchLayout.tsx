@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { AudioStatusIndicator } from '../AudioStatusIndicator';
 import { Sidebar } from './Sidebar';
 import { SlideOutGuide } from '../SlideOutGuide';
 import { Button } from '../ui/button';
@@ -54,7 +53,6 @@ export function WorkbenchLayout({ children }: { children: React.ReactNode }) {
               <h1 className="text-lg font-semibold">Workspace</h1>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <AudioStatusIndicator />
               <Button 
                 variant="outline" 
                 size="sm" 
