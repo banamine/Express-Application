@@ -11,7 +11,11 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors({ origin: '*' }));
+  app.use(cors({
+    origin: 'https://banamine.github.io',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true
+  }));
   app.use(express.json({ limit: '50mb' }));
 
   // Wait for DB migrations

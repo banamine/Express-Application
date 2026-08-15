@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Switch } from 'wouter';
+import { Route, Switch, Router } from 'wouter';
 import { WorkbenchLayout } from './components/layout/WorkbenchLayout';
 import Dashboard from './pages/dashboard';
 import UploadParse from './pages/upload';
@@ -16,7 +16,7 @@ import { Toaster } from 'sonner';
 
 export default function App() {
   return (
-    <>
+    <Router base="/Express-Application">
       <WorkbenchLayout>
         <Switch>
           <Route path="/" component={Dashboard} />
@@ -40,6 +40,6 @@ export default function App() {
         </Switch>
       </WorkbenchLayout>
       <Toaster theme="dark" position="bottom-right" />
-    </>
+    </Router>
   );
 }
