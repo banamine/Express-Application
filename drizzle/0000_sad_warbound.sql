@@ -67,6 +67,7 @@ CREATE TABLE "episodes" (
 	"resume_offset" integer DEFAULT 0 NOT NULL,
 	"preempt" boolean DEFAULT false NOT NULL,
 	"preempt_type" text,
+	"player_route" text,
 	"allowed_players" jsonb
 );
 --> statement-breakpoint
@@ -106,3 +107,21 @@ CREATE INDEX "episodes_status_idx" ON "episodes" USING btree ("status");--> stat
 CREATE UNIQUE INDEX "episodes_url_unique_idx" ON "episodes" USING btree ("url");--> statement-breakpoint
 CREATE INDEX "news_break_log_fired_at_idx" ON "news_break_log" USING btree ("fired_at");--> statement-breakpoint
 CREATE INDEX "news_break_log_type_idx" ON "news_break_log" USING btree ("break_type");
+--> statement-breakpoint
+CREATE TABLE "archive_transcripts" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"broadcast_id" varchar NOT NULL,
+	"start_time" real NOT NULL,
+	"end_time" real NOT NULL,
+	"text_payload" text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "current_rundown" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"network" text NOT NULL,
+	"broadcast_ids" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "current_rundown_network_unique" UNIQUE("network")
+);
+--> statement-breakpoint
+CREATE INDEX "archive_transcripts_broadcast_id_idx" ON "archive_transcripts" USING btree ("broadcast_id");

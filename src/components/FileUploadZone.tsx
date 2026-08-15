@@ -24,7 +24,7 @@ function isAccepted(file: File) {
 }
 
 interface FileUploadZoneProps {
-  onFilesSelect?: (files: File[], replaceExisting: boolean) => void;
+  onFilesSelect?: (files: File[]) => void;
   fileName?: string;
   stats?: { total: number; valid: number };
   onClear?: () => void;
@@ -32,7 +32,6 @@ interface FileUploadZoneProps {
 
 export default function FileUploadZone({ onFilesSelect, fileName, stats, onClear }: FileUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [replaceExisting, setReplaceExisting] = useState(false);
 
   const hasFile = !!fileName;
 
@@ -47,12 +46,12 @@ export default function FileUploadZone({ onFilesSelect, fileName, stats, onClear
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files).filter(isAccepted);
-    if (files.length > 0) onFilesSelect?.(files, replaceExisting);
+    if (files.length > 0) onFilesSelect?.(files);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter(isAccepted);
-    if (files.length > 0) onFilesSelect?.(files, replaceExisting);
+    if (files.length > 0) onFilesSelect?.(files);
     e.target.value = "";
   };
 
@@ -64,7 +63,7 @@ export default function FileUploadZone({ onFilesSelect, fileName, stats, onClear
       const parts = (f as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/') ?? [];
       return parts.length <= 2; // ["folder", "file.mp4"] or ["file.mp4"]
     });
-    if (files.length > 0) onFilesSelect?.(files, replaceExisting);
+    if (files.length > 0) onFilesSelect?.(files);
     e.target.value = "";
   };
 
@@ -150,17 +149,6 @@ export default function FileUploadZone({ onFilesSelect, fileName, stats, onClear
             <span>Browse Folder</span>
           </label>
         </Button>
-      </div>
-      <div className="flex items-center gap-2 px-1">
-        <Checkbox
-          id="upload-replace-existing"
-          checked={replaceExisting}
-          onCheckedChange={(checked) => setReplaceExisting(checked === true)}
-          data-testid="checkbox-upload-replace"
-        />
-        <Label htmlFor="upload-replace-existing" className="text-xs cursor-pointer text-muted-foreground">
-          Replace existing library
-        </Label>
       </div>
     </div>
   );

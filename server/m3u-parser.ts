@@ -19,6 +19,7 @@ export interface M3UEpisode {
 
 import { getFoxAffiliateMarketCode } from "./hls-scraper";
 import { isNewsSource } from "../shared/news-registry";
+import { sanitizeTitle } from "../src/lib/title-sanitizer";
 import https from "https";
 
 // ── Segment reconstruction ────────────────────────────────────────────────────
@@ -220,8 +221,13 @@ export class M3UParser {
     if (!extinfMatch) return null;
 
     const duration = parseInt(extinfMatch[1], 10) || 0;
-    const titlePart = extinfMatch[2].trim();
+    const rawTitlePart = extinfMatch[2].trim();
     const url = urlLine.trim();
+
+    const hasCyrillic = /[^\x00-\x7F]/.test(rawTitlePart);
+    const isJustNumber = /^\d+$/.test(rawTitlePart);
+    const targetString = (hasCyrillic || isJustNumber) ? url : rawTitlePart;
+    const titlePart = sanitizeTitle(targetString);
 
     const episodeInfo = this.parseEpisodeInfo(titlePart, fallbackEpisode);
     const status = this.determineStatus(url);

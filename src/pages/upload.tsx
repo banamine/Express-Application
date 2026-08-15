@@ -57,7 +57,7 @@ export default function UploadParse() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Upload failed');
       setSuccessMsg(`Successfully parsed and imported ${data.count} episodes.`);
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -93,7 +93,7 @@ export default function UploadParse() {
       if (!res.ok) throw new Error(data.error || data.message || 'Import failed');
       setSuccessMsg(`Successfully imported ${data.count} episodes from ${urlList.length} URL(s).`);
       setUrls('');
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
     } catch (err: any) {
       setError(err.message);
     } finally {

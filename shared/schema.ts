@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, bigint, index, uniqueIndex, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, bigint, index, uniqueIndex, boolean, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -20,6 +20,16 @@ export const appSettings = pgTable("app_settings", {
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
+
+export const matrixExtensionFields = {
+  hasMicroPreviews: boolean("has_micro_previews").default(false),
+  microSpriteConfig: jsonb("micro_sprite_config").$type<{
+    url: string;
+    cols: number;
+    rows: number;
+    frames: Array<{ minute_idx: number; col: number; row: number }>;
+  }>()
+};
 
 export const episodes = pgTable("episodes", {
   id: varchar("id").primaryKey(),
@@ -77,6 +87,7 @@ export const episodes = pgTable("episodes", {
    * ["player1","player2"] = both (explicit).
    */
   allowedPlayers: jsonb("allowed_players").$type<string[]>(),
+  ...matrixExtensionFields,
 }, (table) => ({
   titleIdx:  index("episodes_title_idx").on(table.title),
   groupIdx:  index("episodes_group_idx").on(table.groupTitle),
@@ -118,6 +129,13 @@ export const insertEpisodeSchema = createInsertSchema(episodes).extend({
   preempt: z.boolean().default(false).optional(),
   preemptType: z.enum(PREEMPT_TYPES).nullable().optional(),
   allowedPlayers: z.array(z.enum(["player1", "player2"])).nullable().optional(),
+  hasMicroPreviews: z.boolean().default(false).optional(),
+  microSpriteConfig: z.object({
+    url: z.string(),
+    cols: z.number(),
+    rows: z.number(),
+    frames: z.array(z.object({ minute_idx: z.number(), col: z.number(), row: z.number() })),
+  }).optional(),
 });
 
 export type InsertEpisode = z.infer<typeof insertEpisodeSchema>;
@@ -137,26 +155,35 @@ export type LocalVault = typeof localVaults.$inferSelect;
 
 export const archiveHoldingQueue = pgTable("archive_holding_queue", {
   id: serial("id").primaryKey(),
-  identifier: varchar("identifier").notNull().unique(),
+  identifier: varchar("identifier").notNull(),
+  filename: varchar("filename").default(""),
+  thumbnailUrl: text("thumbnail_url"),
   status: text("status").notNull().default("pending"),
   reason: text("reason"),
   retryCount: integer("retry_count").notNull().default(0),
   lastError: text("last_error"),
   fileSizeBytes: integer("file_size_bytes").notNull().default(0),
+  format: varchar("format"),
   retryAt: timestamp("retry_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   ready: boolean("ready").notNull().default(false),
   pendingEpisodeJson: text("pending_episode_json"),
-});
+}, (table) => ({
+  identIdx: uniqueIndex("archive_holding_queue_ident_unique").on(table.identifier),
+}));
 
 export const insertArchiveHoldingQueueSchema = createInsertSchema(archiveHoldingQueue).extend({
   identifier: z.string().min(1),
+  filename: z.string().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
   status: z.enum(["pending", "deriving", "ready", "failed_permanent"]).default("pending"),
+
   reason: z.string().nullable().optional(),
   retryCount: z.number().int().nonnegative().default(0),
   lastError: z.string().nullable().optional(),
   fileSizeBytes: z.number().int().nonnegative().default(0),
+  format: z.string().nullable().optional(),
   retryAt: z.date().nullable().optional(),
   ready: z.boolean().default(false),
   pendingEpisodeJson: z.string().nullable().optional(),
@@ -234,3 +261,51 @@ export const newsBreakLog = pgTable("news_break_log", {
 export const insertNewsBreakLogSchema = createInsertSchema(newsBreakLog);
 export type InsertNewsBreakLog = z.infer<typeof insertNewsBreakLogSchema>;
 export type NewsBreakLogEntry  = typeof newsBreakLog.$inferSelect;
+
+export interface TimeSeriesEntry {
+  id: string;
+  url: string;
+  title: string;
+  timestamp: string; // ISO format
+  status: "ARCHIVED" | "PLAYED_YESTERDAY" | "PLAYED_LAST_HOUR" | "PLAYING_NOW" | "UPCOMING_NEXT" | "QUEUED_FUTURE";
+  duration?: number;
+  metadata?: any;
+}
+
+export const archiveTranscripts = pgTable("archive_transcripts", {
+  id: serial("id").primaryKey(),
+  broadcastId: varchar("broadcast_id").notNull(),
+  startTime: real("start_time").notNull(),
+  endTime: real("end_time").notNull(),
+  textPayload: text("text_payload").notNull(),
+}, (table) => ({
+  broadcastIdIdx: index("archive_transcripts_broadcast_id_idx").on(table.broadcastId),
+}));
+
+export const insertArchiveTranscriptSchema = createInsertSchema(archiveTranscripts);
+export type InsertArchiveTranscript = z.infer<typeof insertArchiveTranscriptSchema>;
+export type ArchiveTranscript = typeof archiveTranscripts.$inferSelect;
+
+export const currentRundown = pgTable("current_rundown", {
+  id: serial("id").primaryKey(),
+  network: text("network").notNull().unique(),
+  broadcastIds: jsonb("broadcast_ids").$type<string[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+
+
+// ── Telemetry Events (Persistent 24-hour log) ────────────────────────────────
+export const telemetryEvents = pgTable("telemetry_events", {
+  id: varchar("id").primaryKey(),
+  timestamp: bigint("timestamp", { mode: "number" }).notNull(),
+  level: text("level").notNull(),
+  category: text("category").notNull(),
+  message: text("message").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+  correlationId: text("correlation_id"),
+});
+
+export const insertTelemetryEventSchema = createInsertSchema(telemetryEvents);
+export type InsertTelemetryEvent = z.infer<typeof insertTelemetryEventSchema>;
+export type TelemetryEventRow = typeof telemetryEvents.$inferSelect;

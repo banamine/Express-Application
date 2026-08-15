@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Tv, Edit, Trash2, Tag } from 'lucide-react';
+import { Loader2, Tv, Edit, Trash2, Tag, Sparkles } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { useToast } from '@/src/hooks/use-toast';
 import AutoTagDialog, { AutoTagRule } from '@/src/components/AutoTagDialog';
@@ -18,10 +19,12 @@ import { BulkImportUrlsDialog } from '@/src/components/BulkImportUrlsDialog';
 import BulkTitleDialog from '@/src/components/BulkTitleDialog';
 import FilterDialog from '@/src/components/FilterDialog';
 import type { Episode } from '@shared/schema';
+import { TimeTravelPlayerDialog } from '@/src/components/TimeTravelPlayerDialog';
 
 export default function EpisodeDB() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   // State for dialogs
   const [isAutoTagOpen, setIsAutoTagOpen] = useState(false);
@@ -32,6 +35,10 @@ export default function EpisodeDB() {
   const [isBulkCleanTitlesOpen, setIsBulkCleanTitlesOpen] = useState(false);
   const [isBulkTitleOpen, setIsBulkTitleOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const [playDialogUrl, setPlayDialogUrl] = useState<string | null>(null);
+  const [isPlayDialogOpen, setIsPlayDialogOpen] = useState(false);
+
   const [activeFilterGroups, setActiveFilterGroups] = useState<string[]>([]);
   const [activeFilterHosts, setActiveFilterHosts] = useState<string[]>([]);
   const [isBulkGroupOpen, setIsBulkGroupOpen] = useState(false);
@@ -48,7 +55,9 @@ export default function EpisodeDB() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const { data: episodes = [], isLoading, error } = useQuery<Episode[]>({
-    queryKey: ['episodes'],
+    queryKey: ['/api/episodes'],
+    staleTime: 60000,
+    retry: 1,
     queryFn: async () => {
       const res = await fetch('/api/episodes');
       if (!res.ok) throw new Error('Failed to load episodes');
@@ -69,7 +78,7 @@ export default function EpisodeDB() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
       toast({
         title: "Tags Applied",
         description: `Successfully updated ${data.changed} episodes.`,
@@ -96,7 +105,7 @@ export default function EpisodeDB() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
       toast({ title: "Episode Updated" });
       setEditingEpisode(null);
     }
@@ -115,7 +124,7 @@ export default function EpisodeDB() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
       toast({ title: "Episodes Deleted" });
       setSelectedIds([]);
       setIsDeleteDialogOpen(false);
@@ -133,7 +142,7 @@ export default function EpisodeDB() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
       toast({ title: "Updated", description: `Successfully updated episodes.` });
       setIsBulkUpdateOpen(false);
       setIsBulkGroupOpen(false);
@@ -152,6 +161,18 @@ export default function EpisodeDB() {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  };
+
+  const handleRepairMetadata = async () => {
+    try {
+      const res = await fetch('/api/repair-all-metadata', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to repair metadata');
+      const data = await res.json();
+      toast({ title: 'Repair complete', description: data.message || 'Metadata repaired successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/episodes'] });
+    } catch (e: any) {
+      toast({ title: 'Error repairing metadata', description: e.message, variant: 'destructive' });
+    }
   };
 
   // Filter episodes based on active tab and search
@@ -209,10 +230,14 @@ export default function EpisodeDB() {
           <h2 className="text-3xl font-bold tracking-tight">Episode DB</h2>
           <p className="text-muted-foreground mt-2">Manage all ingested media assets and scheduling rules.</p>
         </div>
-        <div>
+        <div className="flex gap-2">
           <Button variant="outline" onClick={() => setIsAutoTagOpen(true)} className="gap-2">
             <Tag className="h-4 w-4" />
             Auto-Tag Rules
+          </Button>
+          <Button variant="secondary" onClick={handleRepairMetadata} className="gap-2">
+            <Sparkles className="h-4 w-4" />
+            REPAIR ALL METADATA
           </Button>
         </div>
       </div>
@@ -244,6 +269,58 @@ export default function EpisodeDB() {
           onBulkEditTitles={() => setIsBulkTitleOpen(true)}
           onBrowseArchive={() => setIsBrowseArchiveOpen(true)}
           onImport={() => setIsBulkImportUrlsOpen(true)}
+          onSearchArchive={() => setLocation("/archive")}
+          onStreamFinder={() => setLocation("/series-workbench")}
+          onTVPlayer={() => setLocation("/tvnews-player")}
+          onLivePlayer2={() => setLocation("/player2")}
+          onWeeblyPlay2={() => setLocation("/player1")}
+          onExportJSON={() => {
+            window.open("/api/export/stream-json", "_blank");
+            toast({ title: "Exported JSON" });
+          }}
+          onGenerateM3U={() => {
+            window.open("/api/export/m3u8", "_blank");
+            toast({ title: "Generated M3U" });
+          }}
+          onExportWeebly={() => {
+            window.open("/api/export/weebly", "_blank");
+            toast({ title: "Weebly export triggered" });
+          }}
+          onExportM3UWithWeebly={() => {
+            window.open("/api/export/m3u-weebly", "_blank");
+            toast({ title: "M3U + Weebly export triggered" });
+          }}
+          onClearAll={() => {
+            if (confirm("Are you sure you want to clear ALL episodes? This is irreversible.")) {
+               fetch('/api/episodes/clear', { method: 'POST' }).then(() => {
+                 queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+                 toast({ title: "All episodes cleared" });
+               });
+            }
+          }}
+          onValidateUrls={() => {
+             toast({ title: "Validating URLs in background..." });
+             fetch('/api/episodes/validate-all', { method: 'POST' }).then(async (res) => {
+               if(res.ok) {
+                 queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+                 toast({ title: "URL Validation complete" });
+               } else {
+                 toast({ title: "Validation failed", variant: "destructive" });
+               }
+             });
+          }}
+          onRenumber={() => {
+             toast({ title: "Renumbering episodes..." });
+             fetch('/api/episodes/renumber', { method: 'POST' }).then(async (res) => {
+               if(res.ok) {
+                 queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+                 toast({ title: "Renumbering complete" });
+               } else {
+                 toast({ title: "Renumbering failed", variant: "destructive" });
+               }
+             });
+          }}
+          onCacheLogos={() => toast({ title: "Caching logos..." })}
         />
         
         <div className="flex-1 min-h-0 relative">
@@ -348,11 +425,21 @@ export default function EpisodeDB() {
         onOpenChange={setIsBrowseArchiveOpen}
       />
       
+
+      <TimeTravelPlayerDialog
+        open={isPlayDialogOpen}
+        onOpenChange={setIsPlayDialogOpen}
+        url={playDialogUrl}
+        title="Imported Video"
+        timestamp={null}
+      />
+
       <BulkImportUrlsDialog
         open={isBulkImportUrlsOpen}
         onOpenChange={setIsBulkImportUrlsOpen}
         onImportAndPlay={(url) => {
-          toast({ title: 'Playing episode', description: url });
+          setPlayDialogUrl(url);
+          setIsPlayDialogOpen(true);
         }}
       />
 

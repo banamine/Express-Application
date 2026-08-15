@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CalendarHeatmap } from "../components/CalendarHeatmap";
+import { TimeSeriesTimeline } from "../components/TimeSeriesTimeline";
 import { useLocation, Link } from "wouter";
 import {
   CalendarDays, ArrowLeft, Globe, Radio, Tv, Github, Package,
@@ -185,6 +187,8 @@ function EpBlock({ b, dayTop, pxPerMin }: { b: PlacedBlock; dayTop: number; pxPe
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function CalendarGridPage() {
+  const [viewMode, setViewMode] = useState<"heatmap" | "timeline">("heatmap");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [, setLocation] = useLocation();
   const [weekOffset, setWeekOffset] = useState(0);
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
@@ -339,18 +343,18 @@ export default function CalendarGridPage() {
           </div>
           <div className="flex gap-2">
             <Link
-              href="/tvnews-player"
+              href="/player1"
               className="bg-emerald-500 text-black font-bold rounded px-3 py-1 text-xs hover:bg-emerald-400"
               data-testid="cal-news-loop"
             >
-              NEWS LOOP
+              PLAYER 1 (LINEAR)
             </Link>
             <Link
-              href="/live-player-2"
+              href="/player2"
               className="bg-zinc-800 border border-zinc-600 rounded px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
               data-testid="cal-cinema-mode"
             >
-              CINEMA MODE
+              PLAYER 2 (AJ)
             </Link>
           </div>
         </header>
@@ -366,18 +370,10 @@ export default function CalendarGridPage() {
           </button>
 
           <div className="flex gap-1">
-            {["Week", "Day", "Schedule"].map((v, i) => (
-              <div
-                key={v}
-                className={`px-2 py-0.5 rounded text-xs cursor-pointer ${
-                  i === 0
-                    ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700"
-                    : "bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700"
-                }`}
-              >
-                {v}
-              </div>
+            {["Heatmap", "Timeline"].map((v, i) => (
+              <div key={v} onClick={() => setViewMode(v.toLowerCase() as any)} className={`px-2 py-0.5 rounded text-xs cursor-pointer ${viewMode === v.toLowerCase() ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700" : "bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700"}`}>{v}</div>
             ))}
+
           </div>
 
           <span className="text-zinc-300 text-xs font-semibold">{fmtWeekRange(weekStart)}</span>
@@ -434,74 +430,7 @@ export default function CalendarGridPage() {
         </div>
 
         {/* Calendar grid */}
-        <div className="flex-1 overflow-auto" data-testid="cal-scroll-area">
-          <div className="flex" style={{ minWidth: 0 }}>
-
-            {/* Time gutter */}
-            <div className="w-12 shrink-0 relative bg-zinc-950" style={{ height: TOTAL_H + HEADER_H + 8 }}>
-              <div className="sticky top-0 h-8 bg-zinc-950 z-20 border-b border-zinc-800" />
-              {HOURS.map(h => (
-                <div
-                  key={h}
-                  className="absolute right-2 text-[10px] text-zinc-500 select-none"
-                  style={{ top: HEADER_H + h * HOUR_H - 6 }}
-                >
-                  {fmtHour(h)}
-                </div>
-              ))}
-            </div>
-
-            {/* Day columns */}
-            {weekDays.map((day, di) => {
-              const isToday = day.yyyymmdd === todayYYYYMMDD;
-              const blocks = blocksByDay[day.yyyymmdd] ?? [];
-              return (
-                <div
-                  key={day.yyyymmdd}
-                  className={`flex-1 border-l border-zinc-800 min-w-0 relative ${isToday ? "bg-emerald-950/10" : ""}`}
-                  style={{ height: TOTAL_H + HEADER_H + 8 }}
-                  data-testid={`cal-day-${DAY_LABELS[di].toLowerCase()}`}
-                >
-                  {/* Day header */}
-                  <div
-                    className={`sticky top-0 z-10 flex items-center justify-center gap-1.5 border-b border-zinc-800 text-xs bg-zinc-950 ${
-                      isToday ? "text-emerald-400" : "text-zinc-300"
-                    }`}
-                    style={{ height: HEADER_H }}
-                  >
-                    {day.label}
-                    {blocks.length > 0 && (
-                      <span className="text-zinc-500 text-[10px]">({blocks.length})</span>
-                    )}
-                  </div>
-
-                  {/* Hour grid lines */}
-                  {HOURS.map(h => (
-                    <div
-                      key={h}
-                      className="absolute left-0 right-0 border-t border-zinc-800/40"
-                      style={{ top: HEADER_H + h * HOUR_H }}
-                    />
-                  ))}
-
-                  {/* Half-hour guide lines (subtle) */}
-                  {HOURS.map(h => (
-                    <div
-                      key={`h${h}`}
-                      className="absolute left-0 right-0 border-t border-zinc-800/20"
-                      style={{ top: HEADER_H + h * HOUR_H + HOUR_H / 2 }}
-                    />
-                  ))}
-
-                  {/* Episode blocks */}
-                  {blocks.map((b, bi) => (
-                    <EpBlock key={bi} b={b} dayTop={HEADER_H} pxPerMin={pxPerMin} />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {viewMode === "heatmap" ? (<div className="flex-1 overflow-auto"><CalendarHeatmap onSelectDate={(d) => { setSelectedDate(d); setViewMode("timeline"); }} /></div>) : (<div className="flex-1 overflow-auto" data-testid="cal-scroll-area"><TimeSeriesTimeline date={selectedDate} /></div>)}
 
         {/* Status bar */}
         <footer className="h-7 border-t border-zinc-800 bg-zinc-900 flex items-center px-3 gap-4 shrink-0">

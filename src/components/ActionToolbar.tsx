@@ -30,6 +30,7 @@ interface ActionToolbarProps {
   onGenerateM3U?: () => void;
   onExportWeebly?: () => void;
   onExportM3UWithWeebly?: () => void;
+  onRepairMetadata?: () => void;
   onBulkCleanTitles?: () => void;
   onBulkUpdate?: () => void;
   onBulkEditTitles?: () => void;
@@ -72,6 +73,7 @@ export default function ActionToolbar({
   onGenerateM3U,
   onExportWeebly,
   onExportM3UWithWeebly,
+  onRepairMetadata,
   onBulkCleanTitles,
   onBulkUpdate,
   onBulkEditTitles,

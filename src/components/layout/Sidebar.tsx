@@ -4,9 +4,10 @@ import { cn } from "@/src/lib/utils";
 
 interface SidebarProps {
   className?: string;
+  onClose?: () => void;
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onClose }: SidebarProps) {
   const [location] = useLocation();
 
   const navigation = [
@@ -14,8 +15,12 @@ export function Sidebar({ className }: SidebarProps) {
     { name: 'Upload & Parse', href: '/upload', icon: Upload },
     { name: 'Episode DB', href: '/episodes', icon: ListVideo },
     { name: 'Archive Queue', href: '/archive', icon: Archive },
+    { name: 'Series Ingestion', href: '/series-workbench', icon: Layers },
     { name: 'Scheduler (P1)', href: '/scheduler', icon: CalendarDays },
-    { name: 'Live Player 2', href: '/player2', icon: Layers },
+    { name: 'Player 1 (Linear)', href: '/player1', icon: Layers },
+    { name: 'Live Player 2 (AJ)', href: '/player2', icon: Layers },
+    { name: 'TV Player', href: '/tv', icon: Tv },
+    { name: 'News Player', href: '/news-player', icon: Tv },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
@@ -32,7 +37,7 @@ export function Sidebar({ className }: SidebarProps) {
           {navigation.map((item) => {
             const isActive = location === item.href;
             return (
-              <Link key={item.name} href={item.href} className={cn(
+              <Link key={item.name} href={item.href} onClick={onClose} className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive 
                   ? "bg-primary/10 text-primary" 

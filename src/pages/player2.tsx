@@ -1,149 +1,200 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, FastForward, Maximize, Loader2, Signal } from 'lucide-react';
-import Hls from 'hls.js';
+import { telemetry } from '../lib/telemetry';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, FastForward, SkipBack, Maximize, Signal } from 'lucide-react';
+
+function getTargetDate(offsetDays: number = 0): string {
+  const ptTimeStr = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit' });
+  const [datePart, hourPart] = ptTimeStr.split(', ');
+  const [month, day, year] = datePart.split('/');
+  const hour = parseInt(hourPart, 10);
+  
+  const ptTime = new Date(Number(year), Number(month) - 1, Number(day));
+  let targetDate = new Date(ptTime);
+  
+  if (hour >= 16) {
+    targetDate.setDate(targetDate.getDate() + 3 + offsetDays);
+  } else {
+    targetDate.setDate(targetDate.getDate() + 2 + offsetDays);
+  }
+  
+  const tYear = targetDate.getFullYear();
+  const tMonth = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const tDay = String(targetDate.getDate()).padStart(2, '0');
+  const dayName = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
+  
+  return `${tYear}${tMonth}${tDay}_${dayName}`;
+}
+
+function formatDisplayDate(dateStamp: string): string {
+  const regex = /^(\d{4})(\d{2})(\d{2})_/;
+  const match = dateStamp.match(regex);
+  if (!match) return dateStamp;
+  const [_, year, monthNum, day] = match;
+  const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+  const monthName = monthNames[parseInt(monthNum, 10) - 1];
+  return `${year} -${monthName}-${day}`;
+}
+
+function formatVideoHeader(filename: string): string {
+  const regex = /^(\d{4})(\d{2})(\d{2})_/;
+  const match = filename.match(regex);
+  if (!match) return filename;
+  const [_, year, monthNum, day] = match;
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthName = monthNames[parseInt(monthNum, 10) - 1];
+  return `Alex Jones Network Infowars - AJ BROADCAST / ${year}-${monthName}-${day}`;
+}
+
+interface PlaylistItem {
+  show: string;
+  hour: number;
+  url: string;
+  filename: string;
+}
 
 export default function Player2() {
+  const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [status, setStatus] = useState<'IDLE' | 'LOADING' | 'PLAYING' | 'BREAK'>('IDLE');
-  const [currentShow, setCurrentShow] = useState('Waiting for schedule...');
-  const [telemetry, setTelemetry] = useState<any>({});
-  const [ajPool, setAjPool] = useState<any>({});
-  const [playerCount, setPlayerCount] = useState(0);
-  
-  const currentUrlRef = useRef<string | null>(null);
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
+  const [expandedShows, setExpandedShows] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFallback, setIsFallback] = useState(false);
+  const [activeDateStamp, setActiveDateStamp] = useState(getTargetDate(0));
+  const [isMuted, setIsMuted] = useState(true);
+  const isMutedRef = useRef(true);
 
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch('/api/aj-pool/status');
-        if (res.ok) {
-          const data = await res.json();
-          setAjPool(data);
-          
-          if (data.currentFile) {
-            setCurrentShow(data.currentFile.filename || data.currentFile.title || 'AJ BROADCAST');
-            const newUrl = data.currentFile.url || data.currentFile.videoUrl;
-            if (newUrl && currentUrlRef.current !== newUrl) {
-              currentUrlRef.current = newUrl;
-              loadVideo(newUrl);
-            }
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000); // refresh status periodically
-
-    const evtSource = new EventSource('/api/watchdog/events');
-    evtSource.addEventListener('STATUS', (e: any) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTelemetry(data.payload);
-      } catch (err) {
-        console.error('Failed to parse STATUS event:', err);
-      }
-    });
-    evtSource.addEventListener('FORCE_INJECT', (e: any) => {
-      try {
-        const data = JSON.parse(e.data);
-        setStatus('BREAK');
-        setCurrentShow('NTD NETWORK BREAK');
-        if (data.payload?.url && currentUrlRef.current !== data.payload.url) {
-          currentUrlRef.current = data.payload.url;
-          loadVideo(data.payload.url);
-        }
-      } catch (err) {
-        console.error('Failed to parse FORCE_INJECT event:', err);
-      }
-    });
-    evtSource.addEventListener('show_start', (e: any) => {
-      try {
-        const data = JSON.parse(e.data);
-        setStatus('PLAYING');
-        setCurrentShow(data.title || data.filename || 'AJ BROADCAST');
-        const newUrl = data.url || data.videoUrl;
-        if (newUrl && currentUrlRef.current !== newUrl) {
-          currentUrlRef.current = newUrl;
-          loadVideo(newUrl);
-        }
-      } catch (err) {
-        console.error('Failed to parse show_start event:', err);
-      }
-    });
-    evtSource.addEventListener('PLAYER_CHANGE', (e: any) => {
-      try {
-        const data = JSON.parse(e.data);
-        setPlayerCount(data.payload?.count || 0);
-      } catch (err) {
-        console.error('Failed to parse PLAYER_CHANGE event:', err);
-      }
-    });
-
-    return () => {
-      clearInterval(interval);
-      evtSource.close();
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-      }
-    };
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    if (el) {
+      el.defaultMuted = isMutedRef.current;
+      el.muted = isMutedRef.current;
+    }
+    videoRef.current = el;
   }, []);
   
-  const loadVideo = (url: string) => {
-    if (!videoRef.current) return;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  
+  const discoverPlaylist = async (): Promise<{ items: PlaylistItem[], isFallback: boolean, dateStamp: string }> => {
+    const baseUrl = 'https://ajn.archives.pub/hourly-m4v/';
+    const knownShows = ['Alex', 'WarRoom'];
     
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-    }
+    for (let offset = 0; offset >= -7; offset--) {
+      const dateStamp = getTargetDate(offset);
+      const newPlaylist: PlaylistItem[] = [];
+      let foundAny = false;
+      
+      for (const showName of knownShows) {
+        for (let hour = 1; hour <= 4; hour++) {
+          const filename = `${dateStamp}_${showName}-Hr${hour}.m4v`;
+          const url = `${baseUrl}${filename}`;
+          try {
+            const probeUrl = `/api/probe?url=${encodeURIComponent(url)}`;
+            const response = await fetch(probeUrl);
+            if (response.ok) {
+              newPlaylist.push({ show: showName, hour, url, filename });
+              foundAny = true;
+            } else {
+              break;
+            }
+          } catch (error) {
+            break;
+          }
+        }
+      }
 
-    if (url.toLowerCase().endsWith('.m3u8') || url.toLowerCase().endsWith('.m3u')) {
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-        });
-        hlsRef.current = hls;
-        hls.loadSource(url);
-        hls.attachMedia(videoRef.current);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef.current?.play().catch(console.error);
-          setIsPlaying(true);
-          setStatus('PLAYING');
-        });
-      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-        videoRef.current.src = url;
-        videoRef.current.addEventListener('loadedmetadata', () => {
-          videoRef.current?.play().catch(console.error);
-          setIsPlaying(true);
-          setStatus('PLAYING');
+      if (foundAny) {
+        if (offset < 0) {
+          console.info(`[Batch Ingest] Operating on fallback archive buffer from: ${dateStamp}`);
+        } else {
+          console.log(`[Batch Ingest] Loaded live primary batch for: ${dateStamp}`);
+        }
+        return { items: newPlaylist, isFallback: offset < 0, dateStamp };
+      } else if (offset === 0) {
+        console.warn(`[Batch Ingest Warning]: Primary batch for ${dateStamp} missing. Engaging fallback protocol...`);
+      }
+    }
+    
+    return { items: [], isFallback: false, dateStamp: getTargetDate(0) };
+  };
+
+  const intervalRef = useRef<any>(null);
+  useEffect(() => {
+    const loadPlaylist = async () => {
+      const result = await discoverPlaylist();
+      setPlaylist(result.items);
+      setIsFallback(result.isFallback);
+      setActiveDateStamp(result.dateStamp);
+      setIsLoading(false);
+      
+      const defaultExpanded: Record<string, boolean> = {};
+      result.items.forEach(item => { defaultExpanded[item.show] = true; });
+      setExpandedShows(prev => Object.keys(prev).length === 0 ? defaultExpanded : prev);
+    };
+    
+    loadPlaylist();
+    intervalRef.current = setInterval(loadPlaylist, 60000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (videoRef.current && playlist.length > 0) {
+      videoRef.current.src = playlist[currentIndex].url;
+      if (isPlaying) {
+        videoRef.current.play().catch(err => {
+          console.error('Play failed:', err);
+          setIsPlaying(false);
         });
       }
-    } else {
-      // Direct MP4 playback
-      videoRef.current.src = url;
-      videoRef.current.load();
-      videoRef.current.play().catch(console.error);
-      setIsPlaying(true);
-      setStatus('PLAYING');
     }
-  };
+  }, [currentIndex, playlist]);
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      videoRef.current.play().catch(console.error);
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(e => console.error(e));
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
+  const playNext = () => {
+    telemetry.info('playback', 'Player2 segment/chunk advance', { currentIndex: (currentIndex + 1) % playlist.length });
+    if (playlist.length === 0) return;
+    setCurrentIndex(prev => (prev + 1) % playlist.length);
+  };
+  
+  const playPrevious = () => {
+    if (playlist.length === 0) return;
+    setCurrentIndex(prev => (prev - 1 + playlist.length) % playlist.length);
+  };
+  
+  const jumpToHour = (showName: string, hourNum: number) => {
+    const index = playlist.findIndex(item => item.show === showName && item.hour === hourNum);
+    if (index !== -1) {
+      setCurrentIndex(index);
+      setIsPlaying(true);
+    }
+  };
+
+  const toggleShow = (showName: string) => {
+    setExpandedShows(prev => ({ ...prev, [showName]: !prev[showName] }));
+  };
+
+  const groupedByShow = playlist.reduce((acc, item) => {
+    if (!acc[item.show]) acc[item.show] = [];
+    acc[item.show].push(item);
+    return acc;
+  }, {} as Record<string, PlaylistItem[]>);
+
+  const currentItem = playlist[currentIndex];
+  const currentFilename = currentItem?.filename || 'Waiting for schedule...';
+
   return (
-    <div className="space-y-6 h-full flex flex-col max-w-6xl mx-auto" style={{
+    <div className="flex h-full w-full" style={{
       '--bg': '#121212',
       '--surface-1': '#1a1a1a',
       '--surface-2': '#222222',
@@ -156,107 +207,222 @@ export default function Player2() {
       '--live': '#33d15f',
       '--warn': '#ff4d4d',
     } as any}>
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight text-secondary" style={{ color: 'var(--text-1)' }}>Live Player 2</h2>
-        <p className="mt-2" style={{ color: 'var(--text-2)' }}>AJ Broadcast Mode / VoD with 15-min NTD Breaks</p>
-      </div>
-
-      <div className="flex-1 min-h-[400px] rounded-xl overflow-hidden relative group" style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--border)' }}>
-        {/* TV Player Shell */}
-        <video 
-          ref={videoRef}
-          className="absolute inset-0 w-full h-full object-contain bg-black"
-          playsInline
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-        />
-        
-        {status === 'IDLE' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-            <div className="text-center space-y-4">
-              <Signal className="h-16 w-16 mx-auto animate-pulse" style={{ color: 'var(--text-3)' }} />
-              <h3 className="text-xl font-bold" style={{ color: 'var(--text-2)' }}>STANDBY SIGNAL</h3>
-              <p className="text-sm font-mono" style={{ color: 'var(--text-3)' }}>WAITING FOR MEDIA STREAM</p>
-            </div>
-          </div>
-        )}
-
-        {/* Overlay HUD */}
-        <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className={`h-3 w-3 rounded-full`} style={{ backgroundColor: status === 'BREAK' ? 'var(--warn)' : 'var(--live)' }} />
-              <span className="font-bold text-sm tracking-widest uppercase" style={{ color: 'var(--text-1)' }}>
-                {status === 'BREAK' ? 'NTD NETWORK BREAK' : 'AJ BROADCAST'}
-              </span>
-            </div>
-            <h1 className="text-3xl font-bold mt-2" style={{ color: 'var(--text-1)' }}>{currentShow}</h1>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-mono" style={{ color: 'var(--text-2)' }}>
-              {new Date().toLocaleTimeString('en-US', { hour12: false })}
-            </div>
-            <div className="text-sm" style={{ color: 'var(--text-3)' }}>LOCAL SYSTEM TIME</div>
-          </div>
+      <style dangerouslySetInnerHTML={{__html: `
+        .playlist-sidebar {
+          width: 300px;
+          background: var(--surface-1);
+          color: #fff;
+          padding: 1rem;
+          overflow-y: auto;
+          border-left: 1px solid var(--border);
+        }
+        .show-header {
+          width: 100%;
+          text-align: left;
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          color: #fff;
+          padding: 0.75rem;
+          cursor: pointer;
+          border-radius: 4px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-weight: bold;
+          margin-bottom: 0.5rem;
+        }
+        .show-header:hover { background: var(--surface-3); }
+        .hour-button {
+          width: 100%;
+          text-align: left;
+          background: var(--surface-1);
+          border: 1px solid var(--border);
+          color: var(--text-2);
+          padding: 0.5rem 0.75rem;
+          cursor: pointer;
+          border-radius: 3px;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: all 0.2s;
+        }
+        .hour-button:hover {
+          background: var(--surface-2);
+          color: #fff;
+        }
+        .hour-button.active {
+          background: var(--accent);
+          color: #fff;
+          border-color: var(--accent);
+          font-weight: bold;
+        }
+        .playing-dot { animation: pulse 1s infinite; }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}} />
+      
+      <div className="flex-1 flex flex-col space-y-6 max-w-5xl mx-auto p-4 bg-[var(--bg)]">
+        <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-xl font-bold tracking-wide uppercase" style={{ color: 'var(--text-1)' }}>
+            {formatVideoHeader(currentFilename)}
+          </h2>
         </div>
-
-        {/* Controls */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={togglePlay}
-                className="h-12 w-12 rounded-full flex items-center justify-center transition-colors"
-                style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-              >
-                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
-              </button>
-              <div className="font-mono text-sm" style={{ color: 'var(--text-1)' }}>
-                {status === 'PLAYING' || status === 'BREAK' ? 'LIVE / BUFFERING...' : '00:00:00 / --:--:--'}
+        
+        <div className="flex-1 min-h-[400px] rounded-xl overflow-hidden relative group" style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--border)' }}>
+          <video 
+            ref={setVideoRef}
+            className="absolute inset-0 w-full h-full object-contain bg-black"
+            autoPlay
+            controls
+            onVolumeChange={(e) => {
+              isMutedRef.current = e.currentTarget.muted;
+              setIsMuted(e.currentTarget.muted);
+            }}
+            onEnded={playNext}
+            onLoadStart={(e) => telemetry.info('playback', 'Player2 load start', { url: e.currentTarget.currentSrc })}
+            onWaiting={(e) => telemetry.warn('playback', 'Player2 buffering/waiting', { url: e.currentTarget.currentSrc })}
+            onError={(e) => {
+              const video = e.currentTarget;
+              console.error('Video Error:', video.error);
+              telemetry.error('playback', 'Player2 video error', { error: video.error?.message, code: video.error?.code, url: video.currentSrc });
+              if (playlist.length > 0) playNext();
+            }}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+          />
+          
+          {(playlist.length === 0) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+              <div className="text-center space-y-4">
+                <Signal className="h-16 w-16 mx-auto animate-pulse" style={{ color: 'var(--text-3)' }} />
+                <h3 className="text-xl font-bold" style={{ color: 'var(--text-2)' }}>
+                  {isLoading ? 'DISCOVERING BROADCAST...' : 'STANDBY SIGNAL'}
+                </h3>
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <button className="transition-colors" style={{ color: 'var(--text-2)' }} onMouseOver={e => e.currentTarget.style.color = 'var(--text-1)'} onMouseOut={e => e.currentTarget.style.color = 'var(--text-2)'}>
-                <FastForward className="h-6 w-6" />
-              </button>
-              <button 
-                className="transition-colors" 
-                style={{ color: 'var(--text-2)' }} 
-                onMouseOver={e => e.currentTarget.style.color = 'var(--text-1)'} 
-                onMouseOut={e => e.currentTarget.style.color = 'var(--text-2)'}
-                onClick={() => {
-                  if (videoRef.current) {
-                    if (videoRef.current.requestFullscreen) {
+          )}
+
+          {/* Overlay HUD */}
+          <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: 'var(--live)' }} />
+                <span className="font-bold text-sm tracking-widest uppercase" style={{ color: 'var(--text-1)' }}>
+                  AJ BROADCAST
+                </span>
+              </div>
+              <h1 className="text-3xl font-bold mt-2 uppercase" style={{ color: 'var(--text-1)' }}>
+                {currentItem ? `${currentItem.show.replace('-', ' ')} - Hour ${currentItem.hour}` : formatVideoHeader(currentFilename)}
+              </h1>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-mono" style={{ color: 'var(--text-2)' }}>
+                {new Date().toLocaleTimeString('en-US', { hour12: false })}
+              </div>
+              <div className="text-sm" style={{ color: 'var(--text-3)' }}>LOCAL SYSTEM TIME</div>
+            </div>
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={playPrevious} 
+                  className="h-10 w-10 rounded-full flex items-center justify-center transition-colors"
+                  style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-1)' }}
+                >
+                  <SkipBack className="h-5 w-5" />
+                </button>
+                
+                <button 
+                  onClick={togglePlay}
+                  className="h-12 w-12 rounded-full flex items-center justify-center transition-colors hover:scale-105"
+                  style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                >
+                  {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
+                </button>
+                
+                <button 
+                  onClick={playNext} 
+                  className="h-10 w-10 rounded-full flex items-center justify-center transition-colors"
+                  style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-1)' }}
+                >
+                  <FastForward className="h-5 w-5" />
+                </button>
+                <div className="font-mono text-sm" style={{ color: 'var(--text-1)' }}>
+                  {isPlaying ? 'PLAYING' : 'PAUSED'}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <button 
+                  className="transition-colors" 
+                  style={{ color: 'var(--text-2)' }} 
+                  onClick={() => {
+                    if (videoRef.current && videoRef.current.requestFullscreen) {
                       videoRef.current.requestFullscreen();
                     }
-                  }
-                }}
-              >
-                <Maximize className="h-6 w-6" />
-              </button>
+                  }}
+                >
+                  <Maximize className="h-6 w-6" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Debug / Schedule Info */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-xl p-6 shadow-sm" style={{ backgroundColor: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '12px' }}>
-           <h3 className="font-semibold mb-3 text-lg" style={{ color: 'var(--text-1)' }}>Watchdog Telemetry</h3>
-           <pre className="text-xs font-mono p-4 rounded-md overflow-auto" style={{ backgroundColor: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
-             {`STATUS: ${status}\nTARGET: player2\nMODE: AJ_BROADCAST\nACTIVE_PLAYERS: ${playerCount}`}
-           </pre>
+      <div className="playlist-sidebar flex-shrink-0">
+        <div className="flex justify-between items-start mb-1">
+          <h3 className="text-lg font-bold" style={{ color: 'var(--text-1)' }}>
+            {isFallback ? 'Archive Buffer' : "Today's Broadcast"}
+          </h3>
+          {isFallback && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">
+              Fallback
+            </span>
+          )}
         </div>
-        <div className="rounded-xl p-6 shadow-sm" style={{ backgroundColor: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '12px' }}>
-           <h3 className="font-semibold mb-3 text-lg" style={{ color: 'var(--text-1)' }}>AJ Pool Status</h3>
-           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
-             <strong style={{ color: 'var(--text-1)' }}>Feed Source:</strong> rss.alexjones.media/hourly-mp4-HD.html<br/>
-             <strong style={{ color: 'var(--text-1)' }}>Enabled:</strong> <span style={{ color: ajPool.enabled ? 'var(--live)' : 'var(--warn)' }}>{ajPool.enabled ? 'Yes' : 'No'}</span><br/>
-             <strong style={{ color: 'var(--text-1)' }}>Loaded Files:</strong> {ajPool.files?.length || 0}<br/>
-             <strong style={{ color: 'var(--text-1)' }}>Last Refreshed:</strong> {ajPool.lastRefreshedAt ? new Date(ajPool.lastRefreshedAt).toLocaleString() : 'Never'}
-           </p>
-        </div>
+        <p className="text-sm mb-4 font-mono font-bold tracking-widest drop-shadow-md" style={{ color: isFallback ? 'var(--text-3)' : '#facc15' }}>
+          {formatDisplayDate(activeDateStamp)}
+        </p>
+        
+        {Object.entries(groupedByShow).map(([showName, hours]) => (
+          <div key={showName} className="mb-4">
+            <button 
+              className="show-header"
+              onClick={() => toggleShow(showName)}
+            >
+              <span>{showName.replace('-', ' ')}</span>
+              <span className="text-sm" style={{ color: 'var(--text-3)' }}>({hours.length}h) {expandedShows[showName] ? '▼' : '▶'}</span>
+            </button>
+            
+            {expandedShows[showName] && (
+              <div className="flex flex-col gap-1 pl-2">
+                {hours.map((item) => {
+                  const isCurrentPlaying = playlist.indexOf(item) === currentIndex;
+                  return (
+                    <button
+                      key={`${item.show}-${item.hour}`}
+                      className={`hour-button ${isCurrentPlaying ? 'active' : ''}`}
+                      onClick={() => jumpToHour(item.show, item.hour)}
+                    >
+                      {isCurrentPlaying && <span className="playing-dot">●</span>}
+                      Hour {item.hour}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+        
+        {playlist.length === 0 && !isLoading && (
+          <p className="text-sm italic" style={{ color: 'var(--text-3)' }}>Next batch loading...</p>
+        )}
       </div>
     </div>
   );

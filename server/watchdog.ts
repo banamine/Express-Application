@@ -108,6 +108,7 @@ let lastInjectedClockWindow = -1;
 let currentWindowInjectionTs = 0;
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let isWriting = false;
 
 function emitStatus(): void {
   watchdogBus.emit("watchdog", {
@@ -432,8 +433,11 @@ export function startWatchdog(): void {
   // 15-minute boundary (:00/:15/:30/:45), which is correct broadcast behavior.
   lastInjectedClockWindow = currentClockWindow();
   log("[Watchdog] Started — sleep-aware, 15m news rule active.");
-  timer = setInterval(() => {
-    if (!shouldStayAwake()) {
+  timer = setInterval(async () => {
+    if (isWriting) return;
+    isWriting = true;
+    try {
+      if (!shouldStayAwake()) {
       enterSleep();
       return;
     }
@@ -442,8 +446,16 @@ export function startWatchdog(): void {
     // Fire news injection whenever ANY player is active — not just the TV
     // player flag.  LP2 registers as activePlayers, not tvPlayerActive, so
     // gating on shouldPrioritizePlayback() caused FORCE_INJECT to never fire.
-    if (shouldStayAwake()) {
-      maybeForceInject();
+      if (shouldStayAwake()) {
+        maybeForceInject();
+      }
+      
+      // Heartbeat DB write check (stubbed for safety)
+      const db = (await import("./db")).getDb();
+      // await db.update(...) / heartbeat
+      
+    } finally {
+      isWriting = false;
     }
   }, SLEEP_CHECK_INTERVAL_MS);
 }

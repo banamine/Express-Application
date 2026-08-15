@@ -146,6 +146,7 @@ export default function FilterDialog({
 
   const { data: facets, isError } = useQuery<Facets>({
     queryKey: ["/api/episodes/facets", facetSort],
+    retry: 1,
     queryFn: async () => {
       const res = await fetch(`/api/episodes/facets?sort=${facetSort}`);
       if (!res.ok) throw new Error("Failed to load facets");

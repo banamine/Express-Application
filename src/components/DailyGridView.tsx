@@ -205,6 +205,7 @@ interface DailyGridViewProps {
 export function DailyGridView({ open, onOpenChange }: DailyGridViewProps) {
   const { data, isLoading, isError } = useQuery<ScheduleResponse>({
     queryKey: ["/api/stream/schedule"],
+    retry: 1,
     queryFn: async () => {
       const res = await fetch("/api/stream/schedule");
       if (!res.ok) throw new Error("Failed to load schedule");
@@ -346,27 +347,28 @@ export function DailyGridView({ open, onOpenChange }: DailyGridViewProps) {
 
         {/* Table */}
         <ScrollArea className="h-[60vh]">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="sticky top-0 bg-black/80 backdrop-blur border-b border-white/10 z-10">
-                <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground w-24">
-                  Time (PT)
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground w-32">
-                  Type
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground">
-                  Programme
-                </th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted-foreground w-20">
-                  Duration
-                </th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted-foreground w-16 hidden sm:table-cell">
-                  Segs
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-sm border-collapse min-w-[600px]">
+              <thead>
+                <tr className="sticky top-0 bg-black/80 backdrop-blur border-b border-white/10 z-10">
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground w-24">
+                    Time (PT)
+                  </th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground w-32">
+                    Type
+                  </th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted-foreground">
+                    Programme
+                  </th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted-foreground w-20">
+                    Duration
+                  </th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted-foreground w-16 hidden sm:table-cell">
+                    Segs
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
               {isLoading && <SkeletonRows />}
               {isError && (
                 <tr>
@@ -387,7 +389,8 @@ export function DailyGridView({ open, onOpenChange }: DailyGridViewProps) {
                 />
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </ScrollArea>
       </DialogContent>
     </Dialog>

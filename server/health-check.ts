@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { getDb, ensureDbReady } from "./db";
 import { episodes as episodesTable, appSettings } from "../shared/schema";
 import { isNull, lt, or, eq } from "drizzle-orm";
 
@@ -126,6 +126,7 @@ function armNextTick(ms: number): void {
 async function runHealthCheckPassInternal(): Promise<void> {
   if (state.inProgress) return;
   state.inProgress = true;
+  await ensureDbReady();
   const intervalMs = state.interval === "off" ? 6 * 60 * 60 * 1_000 : (INTERVAL_MS[state.interval] ?? 6 * 60 * 60 * 1_000);
   try {
     console.log("[health-check] Starting incremental URL validation pass…");
@@ -174,6 +175,7 @@ export function getHealthCheckStatus() {
 
 export async function loadIntervalFromDb(): Promise<HealthCheckInterval> {
   try {
+    await ensureDbReady();
     const db = getDb();
     const [row] = await db
       .select()
@@ -190,6 +192,7 @@ export async function loadIntervalFromDb(): Promise<HealthCheckInterval> {
 
 async function persistIntervalToDb(interval: HealthCheckInterval): Promise<void> {
   try {
+    await ensureDbReady();
     const db = getDb();
     await db
       .insert(appSettings)

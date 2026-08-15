@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ImageOff } from "lucide-react";
 
 export function RelativeTime({ date }: { date: Date }) {
   const [label, setLabel] = useState('moments ago');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     function update() {
       const secs = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -11,8 +12,10 @@ export function RelativeTime({ date }: { date: Date }) {
       else                  setLabel(`${Math.floor(secs / 3600)}h ago`);
     }
     update();
-    const t = setInterval(update, 60_000);
-    return () => clearInterval(t);
+    intervalRef.current = setInterval(update, 60_000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [date]);
   return <>{label}</>;
 }

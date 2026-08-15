@@ -23,9 +23,10 @@
 
 import * as cheerio from "cheerio";
 import { readFileSync, writeFileSync } from "fs";
+import { writeTimeSeriesEntry, computeStatus } from './time-series';
 import { createHash } from "crypto";
 import { sql } from "drizzle-orm";
-import { getDb } from "./db";
+import { getDb, ensureDbReady } from "./db";
 import { ajEpisodes } from "../shared/schema";
 
 // ── Feed configuration ────────────────────────────────────────────────────────
@@ -472,7 +473,7 @@ async function selectEntries(): Promise<AjRawEntry[]> {
     const bcastCmp = (a: AjRawEntry, b: AjRawEntry): number => {
       const [ad, as_, ah] = broadcastSortKey(a.filename);
       const [bd, bs_, bh] = broadcastSortKey(b.filename);
-      return (ad - bd) || (as_ - bs_) || (ah - bh) || fnCmp(a.filename, b.filename);
+      return (bd - ad) || (bs_ - as_) || (bh - ah) || fnCmp(b.filename, a.filename);
     };
 
     // Window 1 — rolling 7-day window (strict 168 h expiry)
@@ -650,7 +651,7 @@ async function refreshPool(): Promise<void> {
     const bcastM4vCmp = (a: AjRawEntry, b: AjRawEntry): number => {
       const [ad, as_, ah] = broadcastSortKeyM4v(a.filename);
       const [bd, bs_, bh] = broadcastSortKeyM4v(b.filename);
-      return (ad - bd) || (as_ - bs_) || (ah - bh) || fnCmp(a.filename, b.filename);
+      return (bd - ad) || (bs_ - as_) || (bh - ah) || fnCmp(b.filename, a.filename);
     };
     const m4vSorted = [...m4vWindow].sort(bcastM4vCmp);
     console.log(`[AJPool] M4V window: ${m4vSorted.length} file(s) (${m4vW7.length} in 7-day window)`);
@@ -751,6 +752,28 @@ async function refreshPool(): Promise<void> {
   const fresh = results.filter(Boolean);
   if (fresh.length > 0) {
     _files = fresh;
+    
+    // Action B: Write parsed data arrays to disk via time-series JSON archives
+    try {
+      const now = new Date(); // local server time
+      for (const f of _files) {
+        const entryDate = new Date(f.creationTimeSec ? f.creationTimeSec * 1000 : now.getTime());
+        // Avoid timezone math incorrectly dropping broadcasts; don't filter out by offset
+        const status = computeStatus(entryDate, now);
+        
+        writeTimeSeriesEntry({
+          id: f.episodeId,
+          url: f.videoUrl,
+          title: f.title,
+          timestamp: entryDate.toISOString(),
+          status: status,
+          duration: f.durationSec || 0
+        });
+      }
+      console.log(`[AJPool] Wrote ${_files.length} entries to time-series JSON archives.`);
+    } catch (e: any) {
+      console.error(`[AJPool] Failed to write time-series archive: ${e.message}`);
+    }
   } else if (_files.length === 0) {
     // First-ever refresh failed and pool is still empty — deploy static guard so
     // consumers never receive an empty array indefinitely.
@@ -766,6 +789,7 @@ async function refreshPool(): Promise<void> {
   // onConflictDoUpdate(episodeId): update modMs+filename if the file was re-uploaded.
   (async () => {
     try {
+      await ensureDbReady();
       const db = getDb();
       const rows = _files.map(f => ({
         episodeId: f.episodeId,

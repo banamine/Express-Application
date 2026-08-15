@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+pgdata/
+test.js
+test-archive.js
+rt_old.json
+rt_sample.json
+*.patch
+rumble_cache.json

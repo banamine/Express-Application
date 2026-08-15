@@ -224,7 +224,6 @@ export default function BrowseUserDialog({
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<MultiItemResult | null>(null);
   const [groupTitle, setGroupTitle] = useState("");
-  const [replaceExisting, setReplaceExisting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [detectedLabel, setDetectedLabel] = useState("");
   const [inputError, setInputError] = useState("");
@@ -675,7 +674,6 @@ export default function BrowseUserDialog({
             thumbnailUrl: item.thumbnailUrl,
           })),
           groupTitle: selectedList.list_name || groupTitle || undefined,
-          replaceExisting,
         }),
       });
       if (!response.ok) {
@@ -753,7 +751,6 @@ export default function BrowseUserDialog({
             thumbnailUrl: item.thumbnailUrl,
           })),
           groupTitle: groupTitle || undefined,
-          replaceExisting,
         }),
       });
       if (!response.ok) {
@@ -793,7 +790,6 @@ export default function BrowseUserDialog({
         body: JSON.stringify({
           files: selected,
           groupTitle: groupTitle || undefined,
-          replaceExisting,
         }),
       });
       if (!response.ok) {
@@ -861,7 +857,6 @@ export default function BrowseUserDialog({
     setSelectedItems(new Set());
     setPreviewData(null);
     setGroupTitle("");
-    setReplaceExisting(false);
     setSelectedFiles(new Set());
     setShowImportConfirm(false);
     setInputError("");
@@ -1796,8 +1791,6 @@ export default function BrowseUserDialog({
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="items-replace-existing"
-                      checked={replaceExisting}
-                      onCheckedChange={(checked) => setReplaceExisting(checked === true)}
                       data-testid="checkbox-items-replace"
                     />
                     <Label
@@ -1996,8 +1989,6 @@ export default function BrowseUserDialog({
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="browse-replace-existing"
-                    checked={replaceExisting}
-                    onCheckedChange={(checked) => setReplaceExisting(checked === true)}
                     data-testid="checkbox-browse-replace"
                   />
                   <Label

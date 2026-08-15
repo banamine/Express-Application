@@ -165,11 +165,10 @@ const SORT_OPTIONS = [
 const ROWS_OPTIONS = [50, 100, 200, 500];
 
 export default function ArchiveImportDialog({ open = false, onOpenChange }: ArchiveImportDialogProps) {
-  const [activeTab, setActiveTab] = useState<"direct" | "collection" | "tvnews">("direct");
+  const [activeTab, setActiveTab] = useState<"direct" | "collection" | "tvnews" | "list">("direct");
 
   const [archiveUrl, setArchiveUrl] = useState("");
   const [groupTitle, setGroupTitle] = useState("");
-  const [replaceExisting, setReplaceExisting] = useState(false);
   const [previewData, setPreviewData] = useState<FetchResponse | null>(null);
   const [rssItems, setRssItems] = useState<RssItem[]>([]);
   const [rssSelectedIds, setRssSelectedIds] = useState<Set<string>>(new Set());
@@ -281,7 +280,6 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
             mediatype: i.mediatype,
           })),
           groupTitle: groupTitle || undefined,
-          replaceExisting,
         }),
       });
       if (!response.ok) {
@@ -324,12 +322,35 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
       sonnerToast.error(error.message || "Failed to fetch from Archive.org"),
   });
 
+  const listImportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/archive/import-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: archiveUrl, groupTitle: groupTitle || undefined }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "List import failed");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      sonnerToast.success(data.message || "List items imported successfully");
+      queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+      onOpenChange?.(false);
+    },
+    onError: (error: Error) => {
+      sonnerToast.error(`Failed to import list: ${error.message}`);
+    }
+  });
+
   const importMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch("/api/archive/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: archiveUrl, groupTitle: groupTitle || undefined, replaceExisting }),
+        body: JSON.stringify({ url: archiveUrl, groupTitle: groupTitle || undefined }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -485,7 +506,6 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
   const handleClose = () => {
     setArchiveUrl("");
     setGroupTitle("");
-    setReplaceExisting(false);
     setPreviewData(null);
     setRssItems([]);
     setRssSelectedIds(new Set());
@@ -547,7 +567,7 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "direct" | "collection" | "tvnews")} className="flex flex-col flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "direct" | "collection" | "tvnews" | "list")} className="flex flex-col flex-1 overflow-hidden">
           <TabsList className="w-full justify-start flex-shrink-0">
             <TabsTrigger value="direct" data-testid="tab-direct-import">Direct Import</TabsTrigger>
             <TabsTrigger value="collection" data-testid="tab-collection-import">
@@ -558,7 +578,72 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
               <Tv className="w-3.5 h-3.5 mr-1.5" />
               TV News
             </TabsTrigger>
+            <TabsTrigger value="list" data-testid="tab-list-import">
+              <Library className="w-3.5 h-3.5 mr-1.5" />
+              Lists
+            </TabsTrigger>
           </TabsList>
+
+
+          <TabsContent value="list" className="flex-1 overflow-hidden flex flex-col space-y-4 mt-4">
+            <div className="space-y-4">
+              <div className="p-4 border rounded-md bg-muted/20">
+                <h3 className="font-medium mb-2">Preset Archive Lists (Entertainment Channels)</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Quickly import from curated lists. Note: "Classic News" is intentionally excluded from entertainment playlists per security rules.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { title: "Documentary", url: "https://archive.org/details/@infobattalion/lists/1/documentary" },
+                    { title: "Cartoons", url: "https://archive.org/details/@infobattalion/lists/2/cartoons" },
+                    { title: "Tv Classics", url: "https://archive.org/details/@infobattalion/lists/3/tv_classics" },
+                    { title: "Movies Classics", url: "https://archive.org/details/@infobattalion/lists/4/movies_classics" },
+                    { title: "New World Tyranny", url: "https://archive.org/details/@infobattalion/lists/5/new_world_tyranny" },
+                    { title: "Science", url: "https://archive.org/details/@infobattalion/lists/6/science" }
+                  ].map(preset => (
+                    <Button 
+                      key={preset.title}
+                      variant="secondary" 
+                      size="sm"
+                      onClick={() => {
+                        setArchiveUrl(preset.url);
+                        setGroupTitle(preset.title);
+                      }}
+                    >
+                      {preset.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="list-url">Archive.org List URL</Label>
+              <Input
+                id="list-url"
+                value={archiveUrl}
+                onChange={(e) => setArchiveUrl(e.target.value)}
+                placeholder="e.g. https://archive.org/details/@infobattalion/lists/1/documentary"
+                onKeyDown={(e) => { if (e.key === 'Enter') listImportMutation.mutate(); }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="list-group-title">Channel Name (Optional)</Label>
+              <Input
+                id="list-group-title"
+                value={groupTitle}
+                onChange={(e) => setGroupTitle(e.target.value)}
+                placeholder="e.g. Channel: Documentaries - Infobattalion"
+              />
+            </div>
+            <div className="flex-1" />
+            <DialogFooter className="mt-4 flex justify-end">
+              <Button onClick={() => listImportMutation.mutate()} disabled={listImportMutation.isPending || !archiveUrl}>
+                {listImportMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Archive className="w-4 h-4 mr-2" />}
+                Import List
+              </Button>
+            </DialogFooter>
+          </TabsContent>
 
           <TabsContent value="direct" className="flex-1 overflow-hidden flex flex-col space-y-4 mt-4">
             <div className="space-y-2">
@@ -631,9 +716,9 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
 
                 <ScrollArea className="flex-1 min-h-0 border rounded-md">
                   <div className="p-2 space-y-1">
-                    {rssItems.map((item) => (
+                    {rssItems.map((item, index) => (
                       <div
-                        key={item.identifier}
+                        key={`${item.identifier}-${index}`}
                         className="flex items-center gap-3 p-2 rounded hover-elevate cursor-pointer"
                         onClick={() => {
                           setRssSelectedIds((prev) => {
@@ -682,7 +767,6 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
                     <Input id="rss-group-title" value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} placeholder="Leave blank to use item titles" data-testid="input-rss-group-title" />
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="rss-replace" checked={replaceExisting} onCheckedChange={(c) => setReplaceExisting(c === true)} data-testid="checkbox-rss-replace" />
                     <Label htmlFor="rss-replace" className="text-sm cursor-pointer">
                       Replace existing episodes (clear workbench before import)
                     </Label>
@@ -747,7 +831,6 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
                     <Input id="group-title" value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} placeholder="Leave blank to use collection title" data-testid="input-group-title" />
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="replace-existing" checked={replaceExisting} onCheckedChange={(c) => setReplaceExisting(c === true)} data-testid="checkbox-replace" />
                     <Label htmlFor="replace-existing" className="text-sm cursor-pointer">
                       Replace existing episodes (clear workbench before import)
                     </Label>
@@ -880,7 +963,7 @@ export default function ArchiveImportDialog({ open = false, onOpenChange }: Arch
                   <div className="p-2 space-y-1">
                     {collectionItems.map((item, index) => (
                       <div
-                        key={item.identifier}
+                        key={`${item.identifier}-${index}`}
                         className={`flex items-center gap-3 p-2 rounded cursor-pointer hover-elevate ${selectedCollectionIds.has(item.identifier) ? "bg-primary/5" : ""}`}
                         onClick={() => toggleCollectionItem(item.identifier)}
                         data-testid={`collection-item-${index}`}

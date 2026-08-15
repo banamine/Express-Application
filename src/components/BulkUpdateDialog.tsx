@@ -17,13 +17,13 @@ import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { useState } from "react";
 
-type UpdateField = "groupTitle" | "status";
+type UpdateField = "groupTitle" | "status" | "playerRoute";
 type StatusValue = "valid" | "invalid" | "warning";
 
 interface BulkUpdateDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (updates: { groupTitle?: string; status?: string }) => void;
+  onConfirm: (updates: { groupTitle?: string; status?: string; playerRoute?: string }) => void;
   count: number;
   isGlobal: boolean;
   isPending: boolean;
@@ -39,18 +39,21 @@ export function BulkUpdateDialog({
 }: BulkUpdateDialogProps) {
   const [field, setField] = useState<UpdateField>("groupTitle");
   const [groupValue, setGroupValue] = useState("");
+  const [playerRouteValue, setPlayerRouteValue] = useState("");
   const [statusValue, setStatusValue] = useState<StatusValue>("valid");
 
   const handleConfirm = () => {
     if (field === "groupTitle" && groupValue.trim()) {
       onConfirm({ groupTitle: groupValue.trim() });
+    } else if (field === "playerRoute") {
+      onConfirm({ playerRoute: playerRouteValue.trim() });
     } else if (field === "status") {
       onConfirm({ status: statusValue });
     }
   };
 
   const canConfirm =
-    !isPending && (field === "status" || groupValue.trim().length > 0);
+    !isPending && (field === "status" || field === "playerRoute" || groupValue.trim().length > 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -74,6 +77,7 @@ export function BulkUpdateDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="groupTitle">Group</SelectItem>
+                <SelectItem value="playerRoute">Player Route</SelectItem>
                 <SelectItem value="status">Status</SelectItem>
               </SelectContent>
             </Select>
@@ -87,6 +91,17 @@ export function BulkUpdateDialog({
                 value={groupValue}
                 onChange={(e) => setGroupValue(e.target.value)}
                 placeholder="e.g. Season 3 Backlog"
+                onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
+              />
+            </div>
+          ) : field === "playerRoute" ? (
+            <div className="space-y-1.5">
+              <Label>New player route</Label>
+              <Input
+                data-testid="input-bulk-update-player-route"
+                value={playerRouteValue}
+                onChange={(e) => setPlayerRouteValue(e.target.value)}
+                placeholder="e.g. player1, player2"
                 onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
               />
             </div>

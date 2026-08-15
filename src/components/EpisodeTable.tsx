@@ -637,6 +637,9 @@ export default function EpisodeTable({
                 <SortIcon col="groupTitle" />
               </button>
             </th>
+            <th className="w-32 px-2 py-2.5 text-left font-semibold uppercase tracking-wide text-xs text-muted-foreground">
+              Player Route
+            </th>
             <th className="w-24 px-2 py-2.5 text-left">
               <button
                 className="flex items-center font-semibold uppercase tracking-wide text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -909,6 +912,8 @@ export default function EpisodeTable({
         }}
         components={{
           ...VirtuosoTableComponents,
+          Scroller: forwardRef<HTMLDivElement, any>((props, ref) => <div {...props} ref={ref} className="overflow-auto" />),
+          Table: (props) => <table {...props} style={{ ...props.style, width: '100%', minWidth: '1000px' }} />,
           TableRow: ({ style, item, ...props }) => {
             const row = item as FlatRow;
             // Season header rows get neutral styling

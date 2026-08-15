@@ -71,7 +71,7 @@ function Tile({
     : amber ? (active ? C.amber : C.dim)
     : (active ? C.greenLo : C.dim);
   return (
-    <button
+    <button className="min-h-[44px]"
       tabIndex={0}
       aria-label={ariaLabel}
       aria-pressed={active}
@@ -107,7 +107,7 @@ function SegBtn({ label, active, onClick, "data-testid": testId }: {
   label: string; active: boolean; onClick: () => void; "data-testid"?: string;
 }) {
   return (
-    <button
+    <button className="min-h-[44px]"
       onClick={onClick}
       aria-pressed={active}
       data-testid={testId}
@@ -122,6 +122,7 @@ function SegBtn({ label, active, onClick, "data-testid": testId }: {
         borderBottom: `1px solid ${active ? C.greenLo : C.dimmest}`,
         borderRadius: "4px", color: active ? C.greenLo : C.dim,
         cursor: "pointer", transition: "color 0.12s, border-bottom-color 0.12s",
+        minHeight: "44px", minWidth: "44px",
       }}
     >
       {label}
@@ -166,7 +167,7 @@ function NumInput({ value, onChange, min, max, step = 1, testId }: {
 }
 
 // ── Confirmation Modal ────────────────────────────────────────────────────
-function ConfirmModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+function ConfirmModal({ title, description, confirmText, onConfirm, onCancel, testIdPrefix = "cc-confirm" }: { title: string; description: string; confirmText: string; onConfirm: () => void; onCancel: () => void; testIdPrefix?: string; }) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 10001,
@@ -182,42 +183,45 @@ function ConfirmModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel
       }}>
         <p style={{ color: C.danger, fontSize: "11px", fontWeight: 700,
           letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px" }}>
-          DISABLE PLAYER UI?
+          {title}
         </p>
         <p style={{ color: C.text, fontSize: "12px", lineHeight: 1.6, marginBottom: "20px" }}>
-          This will hide all on-player controls (menu, skip buttons, progress bar) while the player is live.
-          You will not be able to interact with the player UI without enabling it again from here.
+          {description}
         </p>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button
+          <button className="min-h-[44px]"
             onClick={onCancel}
-            data-testid="cc-confirm-cancel"
+            data-testid={`${testIdPrefix}-cancel`}
             style={{
               flex: 1, padding: "9px", fontSize: "11px", fontWeight: 700,
               letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
               background: "#161616", border: "1px solid #333", borderRadius: "5px",
               color: C.dim, ...mono,
+              minHeight: "44px",
             }}
           >
             Cancel
           </button>
-          <button
+          <button className="min-h-[44px]"
             onClick={onConfirm}
-            data-testid="cc-confirm-disable-ui"
+            data-testid={`${testIdPrefix}-confirm`}
             style={{
               flex: 1, padding: "9px", fontSize: "11px", fontWeight: 700,
               letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
               background: C.dangerBg, border: `1px solid ${C.dangerBdr}`,
               borderRadius: "5px", color: C.danger, ...mono,
+              minHeight: "44px",
             }}
           >
-            Disable UI
+            {confirmText}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+import { useSwipeToClose } from '@/src/hooks/useSwipeToClose';
 
 // ── Main component ─────────────────────────────────────────────────────────
 export function CommandCenter() {
@@ -257,6 +261,11 @@ export function CommandCenter() {
     ccMode, setCcMode,
   } = useCommandCenter();
 
+  const { handlers: swipeHandlers, style: swipeStyle } = useSwipeToClose({
+    onClose: close,
+    direction: 'left',
+  });
+
   // Local UI state
   const [advancedOpen,        setAdvancedOpen]        = useState(false);
   const [diagOpen,            setDiagOpen]             = useState(false);
@@ -271,6 +280,7 @@ export function CommandCenter() {
   }, [registerOpenDiagnosticsPanel, expandDiagPanel]);
   const [presetName,          setPresetName]           = useState("");
   const [showUIConfirm,       setShowUIConfirm]        = useState(false);
+  const [showRestartConfirm,  setShowRestartConfirm]   = useState(false);
   const [presetLoadTarget,    setPresetLoadTarget]     = useState("");
 
   const presetNames = Object.keys(savedPresets);
@@ -345,14 +355,39 @@ export function CommandCenter() {
     announce("Player UI hidden. Re-enable it here to restore controls.");
   };
 
+  const handleRestartEngine = () => {
+    setShowRestartConfirm(true);
+  };
+
+  const confirmRestartEngine = () => {
+    setShowRestartConfirm(false);
+    localStorage.clear();
+    window.location.reload();
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       {/* Confirmation modal — rendered outside the panel */}
       {showUIConfirm && (
         <ConfirmModal
+          title="DISABLE PLAYER UI?"
+          description="This will hide all on-player controls (menu, skip buttons, progress bar) while the player is live. You will not be able to interact with the player UI without enabling it again from here."
+          confirmText="Disable UI"
           onConfirm={confirmDisableUI}
           onCancel={() => setShowUIConfirm(false)}
+          testIdPrefix="cc-confirm-ui"
+        />
+      )}
+      
+      {showRestartConfirm && (
+        <ConfirmModal
+          title="RESTART MEDIA ENGINE?"
+          description="This will permanently delete all saved presets and clear your configuration history. The page will reload immediately."
+          confirmText="Restart"
+          onConfirm={confirmRestartEngine}
+          onCancel={() => setShowRestartConfirm(false)}
+          testIdPrefix="cc-confirm-restart"
         />
       )}
 
@@ -375,16 +410,18 @@ export function CommandCenter() {
         aria-modal="true"
         aria-label="Command Center"
         aria-hidden={!isOpen}
+        {...swipeHandlers}
         style={{
           position: "fixed", top: 0, left: 0, height: "100%",
           width: `calc(420px * var(--ui-scale))`,
           background: C.bg, borderLeft: `3px solid ${C.green}`,
           borderRight: "1px solid #1a1a1a", zIndex: 9999,
           display: "flex", flexDirection: "column",
-          transform: isOpen ? "translateX(0)" : "translateX(-100%)",
-          transition: "transform 300ms cubic-bezier(0.4,0,0.2,1), width 0.3s ease-out",
+          transform: isOpen ? (swipeStyle.transform !== 'none' ? swipeStyle.transform : "translateX(0)") : "translateX(-100%)",
+          transition: isOpen && swipeStyle.transform !== 'none' ? swipeStyle.transition : "transform 300ms cubic-bezier(0.4,0,0.2,1), width 0.3s ease-out",
           willChange: "transform",
           fontSize: `calc(12px * var(--ui-scale))`,
+          touchAction: swipeStyle.touchAction,
         }}
       >
         {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -402,7 +439,7 @@ export function CommandCenter() {
           {/* EASY / ADVANCED mode toggle */}
           <div style={{ display: "flex", gap: "14px", marginRight: "auto", marginLeft: "14px" }}>
             {(["easy", "advanced"] as const).map((m) => (
-              <button
+              <button className="min-h-[44px]"
                 key={m}
                 data-testid={`cc-mode-${m}`}
                 onClick={() => { setCcMode(m); announce(`${m === "easy" ? "Easy" : "Advanced"} mode.`); }}
@@ -416,13 +453,14 @@ export function CommandCenter() {
                   color: ccMode === m ? C.green : C.dim,
                   cursor: "pointer",
                   transition: "color 0.12s, border-bottom-color 0.12s",
+                  minHeight: "44px", minWidth: "44px",
                 }}
               >
                 {m}
               </button>
             ))}
           </div>
-          <button
+          <button className="min-h-[44px]"
             tabIndex={0}
             aria-label="Close Command Center"
             data-testid="cc-close"
@@ -431,6 +469,7 @@ export function CommandCenter() {
               background: "none", border: "none", cursor: "pointer", color: "#666",
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "4px", borderRadius: "4px", transition: "color 0.15s",
+              minWidth: "44px", minHeight: "44px",
             }}
             onMouseEnter={(e) => ((e.currentTarget).style.color = "#aaa")}
             onMouseLeave={(e) => ((e.currentTarget).style.color = "#666")}
@@ -585,12 +624,12 @@ export function CommandCenter() {
                   color: C.text, outline: "none",
                 }}
               />
-              <button
+              <button className="min-h-[44px]"
                 onClick={handleSavePreset}
                 disabled={!presetName.trim()}
                 data-testid="cc-preset-save"
                 style={{
-                  padding: "7px 12px", ...mono, fontSize: "10px", fontWeight: 600,
+                  padding: "7px 12px", minHeight: "44px", ...mono, fontSize: "10px", fontWeight: 600,
                   letterSpacing: "0.08em", textTransform: "uppercase",
                   background: "transparent", border: `1px solid rgba(57,255,20,0.25)`,
                   borderRadius: "4px", color: "rgba(57,255,20,0.55)",
@@ -624,12 +663,12 @@ export function CommandCenter() {
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
-                <button
+                <button className="min-h-[44px]"
                   onClick={handleLoadPreset}
                   disabled={!presetLoadTarget}
                   data-testid="cc-preset-load"
                   style={{
-                    padding: "7px 12px", ...mono, fontSize: "10px", fontWeight: 600,
+                    padding: "7px 12px", minHeight: "44px", ...mono, fontSize: "10px", fontWeight: 600,
                     letterSpacing: "0.08em", textTransform: "uppercase",
                     background: "transparent", border: `1px solid ${C.dimmest}`,
                     borderRadius: "4px", color: C.dim,
@@ -641,7 +680,7 @@ export function CommandCenter() {
                   <Download style={{ width: "12px", height: "12px" }} />
                   Load
                 </button>
-                <button
+                <button className="min-h-[44px]"
                   onClick={() => { if (presetLoadTarget) { deletePreset(presetLoadTarget); setPresetLoadTarget(""); announce("Preset deleted."); } }}
                   disabled={!presetLoadTarget}
                   data-testid="cc-preset-delete"
@@ -670,7 +709,7 @@ export function CommandCenter() {
           <SectionLabel>Export</SectionLabel>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px", marginBottom: "8px" }}>
-            <button
+            <button className="min-h-[44px]"
               aria-pressed={applyToExport}
               data-testid="cc-apply-to-export"
               onClick={() => { setApplyToExport(!applyToExport); announce(`Apply to Export ${!applyToExport ? "enabled — settings will be hard-coded into exported files" : "disabled"}.`); }}
@@ -738,8 +777,8 @@ export function CommandCenter() {
             </div>
           </Row>
 
-          <button
-            onClick={() => { localStorage.clear(); window.location.reload(); }}
+          <button className="min-h-[44px]"
+            onClick={handleRestartEngine}
             aria-label="Restart Media Engine — wipes all settings and reloads"
             data-testid="cc-emergency-reset"
             style={{
@@ -757,7 +796,7 @@ export function CommandCenter() {
           </button>
 
           {/* ─ ADVANCED (collapsible) ─ */}
-          <button
+          <button className="min-h-[44px]"
             onClick={() => setAdvancedOpen((v) => !v)}
             data-testid="cc-advanced-toggle"
             style={{
@@ -842,7 +881,7 @@ export function CommandCenter() {
                   How often a break fires during long-form content. Template N = 15 min (news-intensive). Template M = 50 min (movie anchor).
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button
+                  <button className="min-h-[44px]"
                     key={0}
                     data-testid="cc-midroll-cadence-0"
                     onClick={() => setMidRollCadenceMins(0)}
@@ -863,7 +902,7 @@ export function CommandCenter() {
                     OFF
                   </button>
                   {([15, 30, 50] as const).map((mins) => (
-                    <button
+                    <button className="min-h-[44px]"
                       key={mins}
                       data-testid={`cc-midroll-cadence-${mins}`}
                       onClick={() => setMidRollCadenceMins(mins)}
@@ -893,7 +932,7 @@ export function CommandCenter() {
                 <div style={{ fontSize: "9px", color: C.dimmer, marginBottom: "10px", lineHeight: 1.5, ...mono }}>
                   When ON, the next episode boundary forces an NTD_Live handshake instead of queued content. Falls back to the 5-min news package if the live feed is dead.
                 </div>
-                <button
+                <button className="min-h-[44px]"
                   data-testid="cc-live-priority-toggle"
                   onClick={() => setLivePriorityActive(!livePriorityActive)}
                   style={{
@@ -931,7 +970,7 @@ export function CommandCenter() {
                     ] as { id: string; label: string; accent: string }[]).map(({ id, label, accent }) => {
                       const active = guideTheme === id;
                       return (
-                        <button
+                        <button className="min-h-[44px]"
                           key={id}
                           data-testid={`cc-guide-theme-${id}`}
                           onClick={() => setGuideTheme(id as typeof guideTheme)}
@@ -969,7 +1008,7 @@ export function CommandCenter() {
                 </div>
 
                 {/* Preview button */}
-                <button
+                <button className="min-h-[44px]"
                   data-testid="cc-preview-guide"
                   onClick={() => triggerPreviewGuide()}
                   style={{
@@ -999,7 +1038,7 @@ export function CommandCenter() {
                 paddingTop: "14px",
               }}>
                 {/* Collapsible header — always visible; shows live score */}
-                <button
+                <button className="min-h-[44px]"
                   data-testid="cc-diag-toggle-panel"
                   onClick={() => setDiagOpen(v => !v)}
                   style={{
@@ -1122,7 +1161,7 @@ export function CommandCenter() {
                           Black frame · audio RMS · memory guard
                         </div>
                       </div>
-                      <button
+                      <button className="min-h-[44px]"
                         data-testid="cc-diag-probes-toggle"
                         onClick={() => setProbesEnabled(!probesEnabled)}
                         style={{
@@ -1144,7 +1183,7 @@ export function CommandCenter() {
 
                     {/* Auto-Calibrate + countdown */}
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <button
+                      <button className="min-h-[44px]"
                         data-testid="cc-diag-auto-calibrate"
                         onClick={() => {
                           setProbesEnabled(true); // ensure probes are active for the calibration run
@@ -1171,7 +1210,7 @@ export function CommandCenter() {
                     </div>
 
                     {/* Log Dump */}
-                    <button
+                    <button className="min-h-[44px]"
                       data-testid="cc-diag-log-dump"
                       onClick={triggerExportLog}
                       style={{

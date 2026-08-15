@@ -189,6 +189,8 @@ export default function DuplicatesDialog({
 
   const { data: duplicates, isLoading } = useQuery<DuplicatesData>({
     queryKey: ["/api/episodes/duplicates"],
+    staleTime: 60000,
+    retry: 1,
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/episodes/duplicates");
       return res.json();

@@ -62,4 +62,6 @@ export const useCommandCenter = create<any>((set) => ({
   setAjPipAutoResize: (v: boolean) => set({ ajPipAutoResize: v }),
   ccMode: "easy",
   setCcMode: (v: string) => set({ ccMode: v }),
+  newsOverrideMode: 'auto',
+  setNewsOverrideMode: (mode: 'auto' | 'force_on' | 'force_off') => set({ newsOverrideMode: mode }),
 }));

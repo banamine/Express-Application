@@ -8,6 +8,7 @@ import path from 'path';
 
 let dbInstance: any = null;
 let pgliteClient: PGlite | null = null;
+export let dbInitPromise: Promise<void> | null = null;
 
 export function getDb() {
   if (!dbInstance) {
@@ -25,6 +26,7 @@ export function getDb() {
       } catch (e: any) {
         console.error('Failed to push database schema to Neon:', e.stdout || e.message);
       }
+      dbInitPromise = Promise.resolve();
     } else {
       console.log('Using local PGlite fallback');
       pgliteClient = new PGlite('./pgdata');
@@ -32,17 +34,38 @@ export function getDb() {
       
       // Auto-migrate (for local pglite)
       try {
-        const sqlContent = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0000_sad_warbound.sql'), 'utf-8');
-        // Simple way to handle "already exists" without crashing
-        pgliteClient.exec(sqlContent).catch(e => {
-          if (!e.message?.includes('already exists')) {
-            console.error('Migration error:', e);
+        const migrationsDir = path.resolve(process.cwd(), 'migrations');
+        const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+        
+        dbInitPromise = (async () => {
+          for (const file of files) {
+            const sqlContent = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
+            const statements = sqlContent.split('--> statement-breakpoint');
+            
+            for (const stmt of statements) {
+              if (!stmt.trim()) continue;
+              try {
+                await pgliteClient!.exec(stmt.trim());
+              } catch (e: any) {
+                if (!e.message?.includes('already exists') && !e.message?.includes('duplicate column')) {
+                  console.error(`Migration error in ${file}:`, e);
+                }
+              }
+            }
           }
-        });
+        })();
       } catch (e) {
-        console.warn('Could not read migration file', e);
+        console.warn('Could not read migration files', e);
+        dbInitPromise = Promise.resolve();
       }
     }
   }
   return dbInstance;
+}
+
+export async function ensureDbReady() {
+  getDb();
+  if (dbInitPromise) {
+    await dbInitPromise;
+  }
 }
