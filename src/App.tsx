@@ -13,10 +13,12 @@ import Settings from './pages/settings';
 import NewsPlayer from './pages/news-player';
 import SeriesWorkbench from './pages/series-workbench';
 import { Toaster } from 'sonner';
+import { NexusAudioPlayer } from './components/NexusAudioPlayer';
 
 export default function App() {
   return (
     <>
+      <NexusAudioPlayer />
       <WorkbenchLayout>
         <Switch>
           <Route path="/" component={Dashboard} />

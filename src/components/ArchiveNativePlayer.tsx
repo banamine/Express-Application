@@ -27,15 +27,8 @@ export function ArchiveNativePlayer({
   
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  let fullUrl = url;
-  if (startTime !== undefined && endTime !== undefined) {
-    fullUrl = `${url}?t=${startTime}/${endTime}&ignore=x.mp4`;
-  } else if (startTime !== undefined) {
-    fullUrl = `${url}?t=${startTime}/&ignore=x.mp4`;
-  } else if (endTime !== undefined) {
-    // If only endTime is specified, assume start is 0
-    fullUrl = `${url}?t=0/${endTime}&ignore=x.mp4`;
-  }
+  // Treat URL as an immutable string scalar
+  const fullUrl = url;
 
   // Force a clean DOM remount when the URL changes to prevent AbortErrors
   // and clear any stale media state in the browser engine.
@@ -46,6 +39,12 @@ export function ArchiveNativePlayer({
       telemetry.info('playback', 'Player initialized', { url: fullUrl, title, startTime, endTime });
     }
   }, [fullUrl, title, startTime, endTime]);
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && startTime) {
+      videoRef.current.currentTime = startTime;
+    }
+  };
 
   const handleInteract = () => {
     if (videoRef.current) {
@@ -105,6 +104,7 @@ export function ArchiveNativePlayer({
           setIsMuted(e.currentTarget.muted);
         }}
         autoPlay // attempt muted autoplay
+        onLoadedMetadata={handleLoadedMetadata}
         onLoadStart={(e) => telemetry.info('playback', 'ArchiveNativePlayer load start', { url: e.currentTarget.currentSrc })}
         onWaiting={(e) => telemetry.warn('playback', 'ArchiveNativePlayer buffering/waiting', { url: e.currentTarget.currentSrc })}
         onPlay={() => {

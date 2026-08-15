@@ -347,6 +347,34 @@ export async function generateDailyRundown() {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, JSON.stringify(newRundowns, null, 2), 'utf-8');
   console.log(`[NewsBuilder] Daily rundown successfully written to ${outputPath}`);
+
+  // Generate Audio Briefings JSON as per Nexus TV-O architecture
+  const audioBriefingsPath = path.join(process.cwd(), 'public', 'data', 'audio_briefings', 'daily_digest.json');
+  await fs.mkdir(path.dirname(audioBriefingsPath), { recursive: true });
+  
+  const audioDigest = newRundowns.map(r => ({
+    channelId: r.channelId,
+    network: r.network,
+    audioSegments: r.segments.map(seg => {
+      // Regex pipeline ONLY cleans presentation titles
+      const cleanTitle = (seg.title || seg.identifier)
+        .replace(/\[.*?\]|\(.*?\)/g, '')                  // Remove bracket noise
+        .replace(/(1080p|720p|h264|x264|aac|mp3|mp4)/gi, '') // Remove media specs
+        .replace(/[._]/g, ' ')                            // Clean underscores/dots
+        .trim();
+
+      return {
+        id: seg.identifier,
+        cleanTitle,
+        // NEVER mutate, decode, or regex-replace this string
+        rawUrl: `https://archive.org/download/${seg.identifier}/format=mp3`, // Or another audio format logic
+        duration: seg.duration,
+        start: seg.start
+      };
+    })
+  }));
+  await fs.writeFile(audioBriefingsPath, JSON.stringify(audioDigest, null, 2), 'utf-8');
+  console.log(`[NewsBuilder] Audio digest successfully written to ${audioBriefingsPath}`);
 }
 
 // CLI execution check

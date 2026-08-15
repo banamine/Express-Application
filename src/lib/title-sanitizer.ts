@@ -14,13 +14,6 @@ export function sanitizeTitle(rawTitle: string): string {
     clean = clean.split('/').pop() || clean;
   }
 
-  // 2. Decode URL-encoded strings (fixes %20, %27, %28, %29)
-  try {
-    clean = decodeURIComponent(clean);
-  } catch (e) {
-    console.warn("Title decode failed for:", clean);
-  }
-
   // 3. Strip file extensions (.mp4, .mkv, .m4v, .ts, .avi)
   clean = clean.replace(/\.[a-zA-Z0-9]{2,4}$/gi, "");
 
