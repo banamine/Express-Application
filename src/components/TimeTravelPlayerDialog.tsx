@@ -17,7 +17,13 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !url || !videoRef.current) {
+    let processedUrl = url;
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    if (processedUrl && processedUrl.startsWith('/')) {
+      processedUrl = BACKEND_URL + processedUrl;
+    }
+
+    if (!open || !processedUrl || !videoRef.current) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -28,7 +34,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
     const video = videoRef.current;
     setError(null);
 
-    if (url.includes('.m3u8')) {
+    if (processedUrl.includes('.m3u8')) {
       if (Hls.isSupported()) {
         const hls = new Hls({
           maxBufferLength: 30,
@@ -36,7 +42,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
         });
         hlsRef.current = hls;
 
-        hls.loadSource(url);
+        hls.loadSource(processedUrl);
         hls.attachMedia(video);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -68,7 +74,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Safari fallback
-        video.src = url;
+        video.src = processedUrl;
         video.addEventListener('loadedmetadata', () => {
           const playPromise = video.play();
           if (playPromise !== undefined) {
@@ -89,6 +95,12 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
       }
     };
   }, [open, url]);
+
+    let processedUrl = url;
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    if (processedUrl && processedUrl.startsWith('/')) {
+      processedUrl = BACKEND_URL + processedUrl;
+    }
 
   const formattedTime = timestamp ? new Date(timestamp).toLocaleString(undefined, { 
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', 
@@ -126,7 +138,7 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
           )}
           
           <video
-            key={url || "empty"}
+            key={processedUrl || "empty"}
             ref={videoRef}
             className="w-full h-auto max-h-[calc(85vh-140px)] object-contain bg-black"
             controls
@@ -137,13 +149,13 @@ export function TimeTravelPlayerDialog({ open, onOpenChange, url, title, timesta
               setError("Video stream failed to load. The source may be unavailable or invalid.");
             }}
           >
-            {url && !url.includes('.m3u8') && <source src={url} type="video/mp4" />}
+            {processedUrl && !processedUrl.includes('.m3u8') && <source src={processedUrl} type="video/mp4" />}
           </video>
         </div>
         
         <div className="p-4 bg-zinc-900/50 border-t border-zinc-900 flex justify-between items-center shrink-0">
           <p className="text-xs text-zinc-500 font-mono break-all line-clamp-1 flex-1 mr-4">
-            Source: {url}
+            Source: {processedUrl}
           </p>
           <button 
             onClick={() => onOpenChange(false)}

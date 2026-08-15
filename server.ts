@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { registerRoutes } from './server/routes';
 import { playoutEngine } from './server/ntd-playout-engine';
@@ -10,6 +11,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors({ origin: '*' }));
   app.use(express.json({ limit: '50mb' }));
 
   // Wait for DB migrations

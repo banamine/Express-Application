@@ -8,9 +8,15 @@ import { telemetry } from './lib/telemetry';
 // Global fetch override for Correlation ID and Network Telemetry
 const originalFetch = window.fetch;
 const patchedFetch = async function(resource: RequestInfo | URL, config?: RequestInit) {
-  const urlStr = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : resource.toString());
+  let urlStr = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : resource.toString());
+  
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  if (urlStr.startsWith('/')) {
+    urlStr = BACKEND_URL + urlStr;
+  }
+
   if (urlStr.includes('/api/telemetry') || urlStr.includes('/api/watchdog') || urlStr.includes('/api/probe')) {
-    return originalFetch(resource, config);
+    return originalFetch(urlStr, config);
   }
 
   const correlationId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
@@ -28,7 +34,7 @@ const patchedFetch = async function(resource: RequestInfo | URL, config?: Reques
   
   const startTime = Date.now();
   try {
-    const response = await originalFetch(resource, config);
+    const response = await originalFetch(urlStr, config);
     const duration = Date.now() - startTime;
     if (!response.ok) {
       telemetry.error('network', `[${config.method || 'GET'}] ${urlStr} - ${response.status}`, { correlationId, duration, status: response.status });

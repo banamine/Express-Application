@@ -64,7 +64,12 @@ export default function Player1() {
 
   const currentProgram = programQueue[currentIndex];
   const computedTargetUrl = activeBumper?.videoUrl || currentProgram?.url || currentProgram?.videoUrl || currentProgram?.fallbackUrl;
-  const targetUrl = fallbackUrlOverride || computedTargetUrl;
+  let targetUrl = fallbackUrlOverride || computedTargetUrl;
+  
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  if (targetUrl && targetUrl.startsWith('/')) {
+    targetUrl = BACKEND_URL + targetUrl;
+  }
 
   useEffect(() => {
     setFallbackUrlOverride(null);

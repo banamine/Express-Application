@@ -45,7 +45,8 @@ export default function TVPlayer() {
 
   // Load Channel 2 (Live)
   useEffect(() => {
-    const evtSource = new EventSource('/api/aj-pool/stream');
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+    const evtSource = new EventSource(BACKEND_URL + '/api/aj-pool/stream');
     
     evtSource.addEventListener('STATUS', (e: any) => {
       try {
@@ -77,9 +78,19 @@ export default function TVPlayer() {
 
   // Determine current source based on active channel
   const linearProgram = linearQueue[linearIndex];
-  const linearUrl = linearProgram?.url || linearProgram?.videoUrl || linearProgram?.fallbackUrl;
+  let linearUrl = linearProgram?.url || linearProgram?.videoUrl || linearProgram?.fallbackUrl;
   
-  const currentUrl = activeChannel === 1 ? linearUrl : liveUrl;
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  if (linearUrl && linearUrl.startsWith('/')) {
+    linearUrl = BACKEND_URL + linearUrl;
+  }
+  
+  let currentLiveUrl = liveUrl;
+  if (currentLiveUrl && currentLiveUrl.startsWith('/')) {
+    currentLiveUrl = BACKEND_URL + currentLiveUrl;
+  }
+
+  const currentUrl = activeChannel === 1 ? linearUrl : currentLiveUrl;
   const currentTitle = activeChannel === 1 
     ? (linearProgram?.title || linearProgram?.filename || 'Waiting for schedule...')
     : liveTitle;

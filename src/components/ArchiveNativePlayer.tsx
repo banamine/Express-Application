@@ -28,7 +28,11 @@ export function ArchiveNativePlayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Treat URL as an immutable string scalar
-  const fullUrl = url;
+  let fullUrl = url;
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://ajn-archive-iptv-player-382115576551.us-west2.run.app';
+  if (fullUrl && fullUrl.startsWith('/')) {
+    fullUrl = BACKEND_URL + fullUrl;
+  }
 
   // Force a clean DOM remount when the URL changes to prevent AbortErrors
   // and clear any stale media state in the browser engine.
